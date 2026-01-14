@@ -1,1 +1,1 @@
-This is Github repository for Go project.
+Боря гау
