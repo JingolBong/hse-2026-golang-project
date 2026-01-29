@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine 
+    image: postgres:13.8
     container_name: jira-analyzer-postgres
     restart: always
     environment:
@@ -15,6 +15,12 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - jira-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
       interval: 10s
@@ -23,7 +29,7 @@ services:
       start_period: 30s
 
   pgadmin:
-    image: dpage/pgadmin4:8
+    image: dpage/pgadmin4:5.7
     container_name: jira-analyzer-pgadmin
     restart: always
     environment:
@@ -33,6 +39,11 @@ services:
       - "5050:80"
     networks:
       - jira-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,3 +53,4 @@ volumes:
 
 networks:
   jira-network:
+    driver: bridge
