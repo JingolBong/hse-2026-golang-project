@@ -1,0 +1,14 @@
+DBSettings:
+  user: pguser
+  password: pgpwd
+  host: localhost #измениться на master для кубера, позже
+  port: 5432
+  database: testdb
+
+ProgramSettings:
+  jiraUrl: https://issues.apache.org/jira
+  threadCount: 5
+  issueInOneRequest: 100
+  minTimeSleep: 100
+  maxTimeSleep: 30000
+  port: 8001
