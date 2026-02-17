@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -8,9 +9,10 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func NewDB(cfg *Config) (*sql.DB, error) {
-	connectionString := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
+func NewDB(ctx context.Context, cfg *Config) (*sql.DB, error) {
+
+	connStr := fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		cfg.DBSettings.User,
 		cfg.DBSettings.Password,
 		cfg.DBSettings.Host,
@@ -18,18 +20,25 @@ func NewDB(cfg *Config) (*sql.DB, error) {
 		cfg.DBSettings.Database,
 	)
 
-	db, err := sql.Open("postgres", connectionString)
-	if err != nil {
-		return nil, fmt.Errorf("sql.Open: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			db.Close()
-		}
-	}()
+	var db *sql.DB
+	var err error
 
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("db.Ping: %w", err)
+	for i := 0; i < 5; i++ {
+		db, err = sql.Open("postgres", connStr)
+		if err != nil {
+			return nil, fmt.Errorf("sql.Open: %w", err)
+		}
+
+		err = db.PingContext(ctx)
+		if err == nil {
+			break
+		}
+
+		time.Sleep(3 * time.Second)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("db connection failed after retries: %w", err)
 	}
 
 	db.SetMaxOpenConns(25)
