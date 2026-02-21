@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/JingolBong/jira-connector/pkg/models"
@@ -30,10 +32,20 @@ func (s *Storage) UpsertProject(ctx context.Context, p models.Project) (int64, e
 
 	return id, nil
 }
-func GetProjectByJiraID(ctx context.Context, jiraID int64) (*models.Project, error) {
+func (s *Storage) GetProjectByJiraID(ctx context.Context, jiraID int64) (*models.Project, error) {
 	const query = `
 	SELECT jira_id, key, name, url
 	FROM project
 	WHERE jira_id = $1;
 	`
+	var projectFound models.Project
+	err := s.db.QueryRowContext(ctx, query, jiraID).Scan(&projectFound.JiraID, &projectFound.Key, &projectFound.Name, &projectFound.URL)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get project by jira_id %d: %w", jiraID, err)
+	}
+
+	return &projectFound, nil
 }

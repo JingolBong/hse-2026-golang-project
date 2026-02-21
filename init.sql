@@ -17,7 +17,7 @@ CREATE TABLE author (
     email VARCHAR(255)
 );
 
-CREATE TABLE issues (
+CREATE TABLE issue (
     jira_id BIGINT PRIMARY KEY,
     project_id BIGINT NOT NULL,
     key VARCHAR(50) NOT NULL,
@@ -45,16 +45,16 @@ CREATE TABLE status_change (
     new_status VARCHAR(100),
     change_time TIMESTAMP NOT NULL,
 
-    FOREIGN KEY (issue_id) REFERENCES issues(jira_id) ON DELETE CASCADE
+    FOREIGN KEY (issue_id) REFERENCES issue(jira_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_project_key ON project(key);
 CREATE INDEX IF NOT EXISTS idx_author_username ON author(username);
-CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issues(project_id);
-CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
-CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues(priority);
-CREATE INDEX IF NOT EXISTS idx_issues_created_time ON issues(created_time);
-CREATE INDEX IF NOT EXISTS idx_issues_closed_time ON issues(closed_time);
+CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issue(project_id);
+CREATE INDEX IF NOT EXISTS idx_issues_status ON issue(status);
+CREATE INDEX IF NOT EXISTS idx_issues_priority ON issue(priority);
+CREATE INDEX IF NOT EXISTS idx_issues_created_time ON issue(created_time);
+CREATE INDEX IF NOT EXISTS idx_issues_closed_time ON issue(closed_time);
 CREATE INDEX IF NOT EXISTS idx_statuschange_issue_id ON status_change(issue_id);
 CREATE INDEX IF NOT EXISTS idx_statuschange_change_time ON status_change(change_time);
 

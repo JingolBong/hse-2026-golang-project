@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/JingolBong/jira-connector/pkg/models"
@@ -28,4 +30,24 @@ func (s *Storage) UpsertAuthor(ctx context.Context, a models.Author) (int64, err
 	}
 
 	return id, nil
+}
+
+func (s *Storage) GetAuthorByJiraID(ctx context.Context, jiraID int64) (*models.Author, error) {
+	const query = `
+        SELECT jira_id, username, email
+        FROM author
+        WHERE jira_id = $1;`
+
+	var author models.Author
+	err := s.db.QueryRowContext(ctx, query, jiraID).
+		Scan(&author.JiraID, &author.Username, &author.Email)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get author by jira_id %d: %w", jiraID, err)
+	}
+
+	return &author, nil
 }

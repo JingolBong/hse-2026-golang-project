@@ -12,7 +12,7 @@ import (
 func NewDB(ctx context.Context, cfg *Config) (*sql.DB, error) {
 
 	connStr := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		cfg.DBSettings.User,
 		cfg.DBSettings.Password,
 		cfg.DBSettings.Host,
