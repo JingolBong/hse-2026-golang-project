@@ -1,0 +1,22 @@
+writeDB:
+  user: pguser
+  password: pgpwd
+  host: postgres-master
+  port: 5432
+  database: testdb
+  sslmode: disable
+
+readDB:
+  user: pguser
+  password: pgpwd
+  host: postgres-replica
+  port: 5432
+  database: testdb
+  sslmode: disable
+
+program:
+  jiraUrl: https://issues.apache.org/jira
+  threadCount: 5
+  issueInOneRequest: 100
+  minTimeSleep: 100
+  maxTimeSleep: 30000
