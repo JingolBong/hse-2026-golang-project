@@ -1,55 +1,86 @@
 services:
-  postgres:
+  postgres-master:
     image: postgres:13.8
-    container_name: jira-analyzer-postgres
-    restart: always
+    container_name: pg-master
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: testdb
-      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - master_data:/var/lib/postgresql/data
+      - ./postgres/master/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./postgres/master/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./migrations/master-init.sql:/docker-entrypoint-initdb.d/10-master.sql
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - jira-network
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 30s
 
-  pgadmin:
-    image: dpage/pgadmin4:5.7
-    container_name: jira-analyzer-pgadmin
-    restart: always
+  postgres-replica:
+    image: postgres:13.8
+    container_name: pg-replica
     environment:
-      PGADMIN_DEFAULT_EMAIL: pguser@mail.ru
-      PGADMIN_DEFAULT_PASSWORD: pgadmin
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: postgres
+    depends_on:
+      postgres-master:
+        condition: service_healthy
+    volumes:
+      - replica_data:/var/lib/postgresql/data
+      - ./postgres/replica/postgresql.conf:/etc/postgresql/postgresql.conf
+    command: >
+      bash -c "
+        until pg_isready -h postgres-master -p 5432; do echo 'Waiting...'; sleep 2; done &&
+        pg_basebackup -h postgres-master -D /var/lib/postgresql/data -U replicator -Fp -Xs -P -R -v &&
+        chmod 0700 /var/lib/postgresql/data &&
+        chown -R postgres:postgres /var/lib/postgresql/data &&
+        gosu postgres postgres -c config_file=/etc/postgresql/postgresql.conf
+      "
     ports:
-      - "5050:80"
+      - "5433:5432"
     networks:
       - jira-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
+
+
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrator
     depends_on:
-      postgres:
+      postgres-master:
         condition: service_healthy
+    volumes:
+      - ./configs:/app/configs
+      - ./migrations:/app/migrations
+    networks:
+      - jira-network
+
+  connector:
+    build:
+      context: .
+      dockerfile: Dockerfile.connector
+    depends_on:
+      postgres-master:
+        condition: service_healthy
+      postgres-replica:
+        condition: service_started
+    volumes:
+      - ./configs:/app/configs
+    ports:
+      - "8001:8001"
+    networks:
+      - jira-network
 
 volumes:
-  postgres_data:
+  master_data:
+  replica_data:
 
 networks:
   jira-network:

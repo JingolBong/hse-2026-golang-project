@@ -1,8 +1,5 @@
-DROP ROLE IF EXISTS pguser;
-DROP ROLE IF EXISTS replicator;
-
 CREATE ROLE pguser WITH LOGIN PASSWORD 'pgpwd';
-CREATE ROLE replicator WITH LOGIN PASSWORD 'postgres' REPLICATION;
+CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD 'postgres';
 
 CREATE TABLE project (
     jira_id BIGINT PRIMARY KEY,
@@ -30,11 +27,9 @@ CREATE TABLE issue (
     time_spent INTEGER,
     creator_id BIGINT,
     assignee_id BIGINT,
-
     FOREIGN KEY (project_id) REFERENCES project(jira_id) ON DELETE CASCADE,
     FOREIGN KEY (creator_id) REFERENCES author(jira_id),
     FOREIGN KEY (assignee_id) REFERENCES author(jira_id),
-
     CONSTRAINT unique_issue_key UNIQUE(project_id, key)
 );
 
@@ -44,19 +39,18 @@ CREATE TABLE status_change (
     old_status VARCHAR(100),
     new_status VARCHAR(100),
     change_time TIMESTAMP NOT NULL,
-
     FOREIGN KEY (issue_id) REFERENCES issue(jira_id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_project_key ON project(key);
-CREATE INDEX IF NOT EXISTS idx_author_username ON author(username);
-CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issue(project_id);
-CREATE INDEX IF NOT EXISTS idx_issues_status ON issue(status);
-CREATE INDEX IF NOT EXISTS idx_issues_priority ON issue(priority);
-CREATE INDEX IF NOT EXISTS idx_issues_created_time ON issue(created_time);
-CREATE INDEX IF NOT EXISTS idx_issues_closed_time ON issue(closed_time);
-CREATE INDEX IF NOT EXISTS idx_statuschange_issue_id ON status_change(issue_id);
-CREATE INDEX IF NOT EXISTS idx_statuschange_change_time ON status_change(change_time);
+CREATE INDEX CONCURRENTLY idx_project_key ON project(key);
+CREATE INDEX CONCURRENTLY idx_author_username ON author(username);
+CREATE INDEX CONCURRENTLY idx_issues_project_id ON issue(project_id);
+CREATE INDEX CONCURRENTLY idx_issues_status ON issue(status);
+CREATE INDEX CONCURRENTLY idx_issues_priority ON issue(priority);
+CREATE INDEX CONCURRENTLY idx_issues_created_time ON issue(created_time);
+CREATE INDEX CONCURRENTLY idx_issues_closed_time ON issue(closed_time);
+CREATE INDEX CONCURRENTLY idx_statuschange_issue_id ON status_change(issue_id);
+CREATE INDEX CONCURRENTLY idx_statuschange_change_time ON status_change(change_time);
 
 GRANT USAGE ON SCHEMA public TO pguser;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO pguser;
@@ -66,16 +60,5 @@ GRANT CONNECT ON DATABASE testdb TO replicator;
 GRANT USAGE ON SCHEMA public TO replicator;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO replicator;
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO pguser;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-GRANT USAGE, SELECT ON SEQUENCES TO pguser;
-
---Logical replecation test version for CQRS and Logical replication in future
---ALTER SYSTEM SET wal_level = logical;
---ALTER SYSTEM SET max_replication_slots = 10;
---ALTER SYSTEM SET max_logical_replication_workers = 10;
---ALTER SYSTEM SET max_worker_processes = 10;
---TODO
---ALTER USER replicator REPLICATION LOGIN;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO pguser;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO pguser;
