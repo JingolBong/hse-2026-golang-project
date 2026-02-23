@@ -47,7 +47,8 @@ func (s *Storage) GetStatusChangesByIssue(ctx context.Context, issueJiraID int64
 	const query = `
 	SELECT sc.id, sc.issue_id, sc.old_status, sc.new_status, sc.change_time
 	FROM status_change sc
-	WHERE sc.issue_id = $1;
+	WHERE sc.issue_id = $1
+	ORDER BY change_time ASC;
 	`
 	var changes []models.StatusChange
 	rows, err := s.db.QueryContext(ctx, query, issueJiraID)
@@ -63,5 +64,10 @@ func (s *Storage) GetStatusChangesByIssue(ctx context.Context, issueJiraID int64
 		}
 		changes = append(changes, statusChange)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return changes, nil
 }

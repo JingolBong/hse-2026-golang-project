@@ -100,7 +100,8 @@ func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) (
 	const query = `
 	SELECT i.jira_id, i.project_id, i.key, i.summary, i.status, i.priority, i.created_time, i.updated_time, i.closed_time, i.time_spent, i.creator_id, i.assignee_id
 	FROM issue i
-	WHERE i.project_id = $1;
+	WHERE i.project_id = $1
+	ORDER BY i.created_time ASC;
 	`
 	var issues []models.Issue
 	rows, err := s.db.QueryContext(ctx, query, projectJiraID)
@@ -117,6 +118,10 @@ func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) (
 			return nil, fmt.Errorf("scan issue for project jira_id %d: %w", projectJiraID, err)
 		}
 		issues = append(issues, issue)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return issues, nil
