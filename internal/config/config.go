@@ -8,16 +8,18 @@ import (
 )
 
 type Config struct {
-	DBSettings      DBSettings      `yaml:"DBSettings"`
-	ProgramSettings ProgramSettings `yaml:"ProgramSettings"`
+	Program ProgramSettings `yaml:"program"`
+	WriteDB DBSettings      `yaml:"writeDB"`
+	ReadDB  DBSettings      `yaml:"readDB"`
 }
 
 type DBSettings struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
-	Host     string `yaml:"host"` //измениться на master для k8s, позже
+	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	Database string `yaml:"database"`
+	SSLMode  string `yaml:"sslmode"`
 }
 
 type ProgramSettings struct {

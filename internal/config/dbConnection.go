@@ -9,15 +9,15 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func NewDB(ctx context.Context, cfg *Config) (*sql.DB, error) {
-
+func NewDB(ctx context.Context, dbCfg DBSettings) (*sql.DB, error) {
 	connStr := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.DBSettings.User,
-		cfg.DBSettings.Password,
-		cfg.DBSettings.Host,
-		cfg.DBSettings.Port,
-		cfg.DBSettings.Database,
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		dbCfg.User,
+		dbCfg.Password,
+		dbCfg.Host,
+		dbCfg.Port,
+		dbCfg.Database,
+		dbCfg.SSLMode,
 	)
 
 	var db *sql.DB
@@ -47,3 +47,8 @@ func NewDB(ctx context.Context, cfg *Config) (*sql.DB, error) {
 
 	return db, nil
 }
+
+//cfg, err := config.LoadConfig("configs/config.yaml")
+//writeDB, err := config.NewDB(ctx, cfg.WriteDB)
+//readDB, err := config.NewDB(ctx, cfg.ReadDB)
+//storage := db.NewStorage(writeDB, readDB) probably like this in main
