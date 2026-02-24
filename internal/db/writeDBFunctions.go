@@ -3,10 +3,56 @@ package db
 import (
 	"context"
 	"fmt"
+	"hse-2026-golang-project/internal/models"
 	"strings"
-
-	"github.com/JingolBong/jira-connector/pkg/models"
 )
+
+func (s *Storage) UpsertProject(ctx context.Context, p models.Project) (int64, error) {
+	const query = `
+	INSERT INTO project (jira_id, key, name, url)
+	VALUES ($1, $2, $3, $4)
+	ON CONFLICT (jira_id)
+	DO UPDATE SET
+		key = EXCLUDED.key,
+		name = EXCLUDED.name,
+		url = EXCLUDED.url
+	RETURNING jira_id;
+	`
+
+	var id int64
+	err := s.db.QueryRowContext(ctx, query,
+		p.JiraID, p.Key, p.Name, p.URL,
+	).Scan(&id)
+
+	if err != nil {
+		return 0, fmt.Errorf("upsert project %d: %w", p.JiraID, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) UpsertAuthor(ctx context.Context, a models.Author) (int64, error) {
+	const query = `
+	INSERT INTO author (jira_id, username, email)
+	VALUES ($1, $2, $3)
+	ON CONFLICT (jira_id)
+	DO UPDATE SET
+		username = EXCLUDED.username,
+		email = EXCLUDED.email
+	RETURNING jira_id;
+	`
+
+	var id int64
+	err := s.db.QueryRowContext(ctx, query,
+		a.JiraID, a.Username, a.Email,
+	).Scan(&id)
+
+	if err != nil {
+		return 0, fmt.Errorf("upsert author %d: %w", a.JiraID, err)
+	}
+
+	return id, nil
+}
 
 func (s *Storage) UpsertIssue(ctx context.Context, issue models.Issue) (int64, error) {
 	const query = `
@@ -96,33 +142,37 @@ func (s *Storage) UpsertIssuesBatch(ctx context.Context, issues []models.Issue) 
 	return nil
 }
 
-func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) ([]models.Issue, error) {
-	const query = `
-	SELECT i.jira_id, i.project_id, i.key, i.summary, i.status, i.priority, i.created_time, i.updated_time, i.closed_time, i.time_spent, i.creator_id, i.assignee_id
-	FROM issue i
-	WHERE i.project_id = $1
-	ORDER BY i.created_time ASC;
-	`
-	var issues []models.Issue
-	rows, err := s.db.QueryContext(ctx, query, projectJiraID)
+func (s *Storage) InsertStatusChanges(ctx context.Context, changes []models.StatusChange) error {
+	if len(changes) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("get issues by project jira_id %d: %w", projectJiraID, err)
+		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer rows.Close()
+	defer tx.Rollback()
 
-	for rows.Next() {
-		var issue models.Issue
-		err := rows.Scan(&issue.JiraID, &issue.ProjectID, &issue.Key, &issue.Summary, &issue.Status, &issue.Priority,
-			&issue.CreatedAt, &issue.UpdatedAt, &issue.ClosedAt, &issue.TimeSpent, &issue.CreatorID, &issue.AssigneeID)
-		if err != nil {
-			return nil, fmt.Errorf("scan issue for project jira_id %d: %w", projectJiraID, err)
-		}
-		issues = append(issues, issue)
-	}
+	const fieldsPerChange = 4
+	valueStrings := make([]string, 0, len(changes))
+	valueArgs := make([]interface{}, 0, len(changes)*fieldsPerChange)
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+	for _, change := range changes {
+		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d)", len(valueArgs)+1, len(valueArgs)+2, len(valueArgs)+3, len(valueArgs)+4))
+		valueArgs = append(valueArgs, change.IssueID, change.OldStatus, change.NewStatus, change.ChangeTime)
 	}
 
-	return issues, nil
+	query := fmt.Sprintf(`
+	INSERT INTO status_change (issue_id, old_status, new_status, change_time)
+	VALUES %s;`, strings.Join(valueStrings, ", "))
+
+	if _, err := tx.ExecContext(ctx, query, valueArgs...); err != nil {
+		return fmt.Errorf("insert status changes batch (%d): %w", len(changes), err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
 }
