@@ -20,7 +20,7 @@ func (s *Storage) UpsertProject(ctx context.Context, p models.Project) (int64, e
 	`
 
 	var id int64
-	err := s.db.QueryRowContext(ctx, query,
+	err := s.writeDB.QueryRowContext(ctx, query,
 		p.JiraID, p.Key, p.Name, p.URL,
 	).Scan(&id)
 
@@ -43,7 +43,7 @@ func (s *Storage) UpsertAuthor(ctx context.Context, a models.Author) (int64, err
 	`
 
 	var id int64
-	err := s.db.QueryRowContext(ctx, query,
+	err := s.writeDB.QueryRowContext(ctx, query,
 		a.JiraID, a.Username, a.Email,
 	).Scan(&id)
 
@@ -74,7 +74,7 @@ func (s *Storage) UpsertIssue(ctx context.Context, issue models.Issue) (int64, e
 	RETURNING jira_id;
 	`
 	var id int64
-	err := s.db.QueryRowContext(ctx, query,
+	err := s.writeDB.QueryRowContext(ctx, query,
 		issue.JiraID, issue.ProjectID, issue.Key, issue.Summary, issue.Status, issue.Priority,
 		issue.CreatedAt, issue.UpdatedAt, issue.ClosedAt, issue.TimeSpent, issue.CreatorID, issue.AssigneeID,
 	).Scan(&id)
@@ -91,7 +91,7 @@ func (s *Storage) UpsertIssuesBatch(ctx context.Context, issues []models.Issue) 
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.writeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
@@ -147,7 +147,7 @@ func (s *Storage) InsertStatusChanges(ctx context.Context, changes []models.Stat
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.writeDB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}

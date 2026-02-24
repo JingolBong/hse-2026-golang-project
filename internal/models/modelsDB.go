@@ -3,16 +3,16 @@ package models
 import "time"
 
 type Project struct {
-	JiraID int64  `db:"jira_id" json:"jiraId"`
-	Key    string `db:"key" json:"key"`
-	Name   string `db:"name" json:"name"`
-	URL    string `db:"url" json:"url"`
+	JiraID int64  `db:"jira_id"`
+	Key    string `db:"key"`
+	Name   string `db:"name"`
+	URL    string `db:"url"`
 }
 
 type Author struct {
-	JiraID   int64   `db:"jira_id" json:"jiraId"`
-	Username string  `db:"username" json:"username"`
-	Email    *string `db:"email" json:"email,omitempty"` //omitempty для того, чтобы не возвращать поле, если email отсутствует (pointer на полях которые могут быть null в БД)
+	JiraID   int64   `db:"jira_id"`
+	Username string  `db:"username"`
+	Email    *string `db:"email"`
 }
 
 type Issue struct {
@@ -31,9 +31,9 @@ type Issue struct {
 }
 
 type StatusChange struct {
-	ID         int64     `db:"id" json:"id"`
-	IssueID    int64     `db:"issue_id" json:"issueId"`
-	OldStatus  *string   `db:"old_status" json:"oldStatus,omitempty"`
-	NewStatus  *string   `db:"new_status" json:"newStatus,omitempty"`
-	ChangeTime time.Time `db:"change_time" json:"changeTime"`
+	ID         int64     `db:"id"`
+	IssueID    int64     `db:"issue_id"`
+	OldStatus  *string   `db:"old_status"`
+	NewStatus  *string   `db:"new_status"`
+	ChangeTime time.Time `db:"change_time"`
 }
