@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"hse-2026-golang-project/internal/models"
 	"strings"
@@ -18,16 +19,15 @@ func (s *Storage) UpsertProject(ctx context.Context, p models.Project) (int64, e
 		url = EXCLUDED.url
 	RETURNING jira_id;
 	`
-
 	var id int64
-	err := s.writeDB.QueryRowContext(ctx, query,
-		p.JiraID, p.Key, p.Name, p.URL,
-	).Scan(&id)
-
+	err := s.writeTx(ctx, nil, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, query,
+			p.JiraID, p.Key, p.Name, p.URL,
+		).Scan(&id)
+	})
 	if err != nil {
 		return 0, fmt.Errorf("upsert project %d: %w", p.JiraID, err)
 	}
-
 	return id, nil
 }
 
@@ -43,9 +43,11 @@ func (s *Storage) UpsertAuthor(ctx context.Context, a models.Author) (int64, err
 	`
 
 	var id int64
-	err := s.writeDB.QueryRowContext(ctx, query,
-		a.JiraID, a.Username, a.Email,
-	).Scan(&id)
+	err := s.writeTx(ctx, nil, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, query,
+			a.JiraID, a.Username, a.Email,
+		).Scan(&id)
+	})
 
 	if err != nil {
 		return 0, fmt.Errorf("upsert author %d: %w", a.JiraID, err)
@@ -65,7 +67,6 @@ func (s *Storage) UpsertIssue(ctx context.Context, issue models.Issue) (int64, e
 		summary = EXCLUDED.summary,
 		status = EXCLUDED.status,
 		priority = EXCLUDED.priority,
-		created_time = EXCLUDED.created_time,
 		updated_time = EXCLUDED.updated_time,
 		closed_time = EXCLUDED.closed_time,
 		time_spent = EXCLUDED.time_spent,
@@ -74,11 +75,12 @@ func (s *Storage) UpsertIssue(ctx context.Context, issue models.Issue) (int64, e
 	RETURNING jira_id;
 	`
 	var id int64
-	err := s.writeDB.QueryRowContext(ctx, query,
-		issue.JiraID, issue.ProjectID, issue.Key, issue.Summary, issue.Status, issue.Priority,
-		issue.CreatedAt, issue.UpdatedAt, issue.ClosedAt, issue.TimeSpent, issue.CreatorID, issue.AssigneeID,
-	).Scan(&id)
-
+	err := s.writeTx(ctx, nil, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, query,
+			issue.JiraID, issue.ProjectID, issue.Key, issue.Summary, issue.Status, issue.Priority,
+			issue.CreatedAt, issue.UpdatedAt, issue.ClosedAt, issue.TimeSpent, issue.CreatorID, issue.AssigneeID,
+		).Scan(&id)
+	})
 	if err != nil {
 		return 0, fmt.Errorf("upsert issue %d: %w", issue.JiraID, err)
 	}
@@ -86,93 +88,138 @@ func (s *Storage) UpsertIssue(ctx context.Context, issue models.Issue) (int64, e
 	return id, nil
 }
 
-func (s *Storage) UpsertIssuesBatch(ctx context.Context, issues []models.Issue) error {
+func (s *Storage) UpsertIssuesBatch(
+	ctx context.Context,
+	issues []models.Issue,
+) error {
+
 	if len(issues) == 0 {
 		return nil
 	}
 
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	var (
+		args   []interface{}
+		values []string
+	)
+	cols := 12
 
-	const fieldsPerIssue = 12
-	valueStrings := make([]string, 0, len(issues))
-	valueArgs := make([]interface{}, 0, len(issues)*fieldsPerIssue)
+	return s.writeTx(ctx, nil, func(tx *sql.Tx) error {
 
-	for _, issue := range issues {
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
-			len(valueArgs)+1, len(valueArgs)+2, len(valueArgs)+3, len(valueArgs)+4,
-			len(valueArgs)+5, len(valueArgs)+6, len(valueArgs)+7, len(valueArgs)+8,
-			len(valueArgs)+9, len(valueArgs)+10, len(valueArgs)+11, len(valueArgs)+12,
-		))
-		valueArgs = append(valueArgs,
-			issue.JiraID, issue.ProjectID, issue.Key, issue.Summary, issue.Status, issue.Priority,
-			issue.CreatedAt, issue.UpdatedAt, issue.ClosedAt, issue.TimeSpent, issue.CreatorID, issue.AssigneeID,
-		)
-	}
+		for i, issue := range issues {
+			offset := i*cols + 1
 
-	query := fmt.Sprintf(`
-	INSERT INTO ISSUE (jira_id, project_id, key, summary, status, priority, created_time, updated_time, closed_time, time_spent, creator_id, assignee_id)
-	VALUES %s
-	ON CONFLICT (jira_id)
-	DO UPDATE SET
-		project_id = EXCLUDED.project_id,
-		key = EXCLUDED.key,
-		summary = EXCLUDED.summary,
-		status = EXCLUDED.status,
-		priority = EXCLUDED.priority,
-		created_time = EXCLUDED.created_time,
-		updated_time = EXCLUDED.updated_time,
-		closed_time = EXCLUDED.closed_time,
-		time_spent = EXCLUDED.time_spent,
-		creator_id = EXCLUDED.creator_id,
-		assignee_id = EXCLUDED.assignee_id;
-	`, strings.Join(valueStrings, ", "))
+			values = append(values,
+				fmt.Sprintf("($%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d,$%d)",
+					offset, offset+1, offset+2, offset+3,
+					offset+4, offset+5, offset+6, offset+7,
+					offset+8, offset+9, offset+10, offset+11,
+				),
+			)
 
-	if _, err := tx.ExecContext(ctx, query, valueArgs...); err != nil {
-		return fmt.Errorf("upsert issues batch (%d): %w", len(issues), err)
-	}
+			args = append(args,
+				issue.JiraID,
+				issue.ProjectID,
+				issue.Key,
+				issue.Summary,
+				issue.Status,
+				issue.Priority,
+				issue.CreatedAt,
+				issue.UpdatedAt,
+				issue.ClosedAt,
+				issue.TimeSpent,
+				issue.CreatorID,
+				issue.AssigneeID,
+			)
+		}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
+		query := fmt.Sprintf(`
+			INSERT INTO issue (
+				jira_id,
+				project_id,
+				key,
+				summary,
+				status,
+				priority,
+				created_time,
+				updated_time,
+				closed_time,
+				time_spent,
+				creator_id,
+				assignee_id
+			)
+			VALUES %s
+			ON CONFLICT (jira_id)
+			DO UPDATE SET
+				project_id = EXCLUDED.project_id,
+				key = EXCLUDED.key,
+				summary = EXCLUDED.summary,
+				status = EXCLUDED.status,
+				priority = EXCLUDED.priority,
+				updated_time = EXCLUDED.updated_time,
+				closed_time = EXCLUDED.closed_time,
+				time_spent = EXCLUDED.time_spent,
+				creator_id = EXCLUDED.creator_id,
+				assignee_id = EXCLUDED.assignee_id;
+		`, strings.Join(values, ","))
 
-	return nil
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return fmt.Errorf("batch upsert issues: %w", err)
+		}
+
+		return nil
+	})
 }
 
-func (s *Storage) InsertStatusChanges(ctx context.Context, changes []models.StatusChange) error {
+func (s *Storage) InsertStatusChangesBatch(
+	ctx context.Context,
+	changes []models.StatusChange,
+) error {
+
 	if len(changes) == 0 {
 		return nil
 	}
 
-	tx, err := s.writeDB.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+	var (
+		args   []interface{}
+		values []string
+	)
+	cols := 4
 
-	const fieldsPerChange = 4
-	valueStrings := make([]string, 0, len(changes))
-	valueArgs := make([]interface{}, 0, len(changes)*fieldsPerChange)
+	return s.writeTx(ctx, nil, func(tx *sql.Tx) error {
 
-	for _, change := range changes {
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d)", len(valueArgs)+1, len(valueArgs)+2, len(valueArgs)+3, len(valueArgs)+4))
-		valueArgs = append(valueArgs, change.IssueID, change.OldStatus, change.NewStatus, change.ChangeTime)
-	}
+		for i, sc := range changes {
+			offset := i*cols + 1
 
-	query := fmt.Sprintf(`
-	INSERT INTO status_change (issue_id, old_status, new_status, change_time)
-	VALUES %s;`, strings.Join(valueStrings, ", "))
+			values = append(values,
+				fmt.Sprintf("($%d,$%d,$%d,$%d)",
+					offset, offset+1, offset+2, offset+3,
+				),
+			)
 
-	if _, err := tx.ExecContext(ctx, query, valueArgs...); err != nil {
-		return fmt.Errorf("insert status changes batch (%d): %w", len(changes), err)
-	}
+			args = append(args,
+				sc.IssueID,
+				sc.OldStatus,
+				sc.NewStatus,
+				sc.ChangeTime,
+			)
+		}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
+		query := fmt.Sprintf(`
+			INSERT INTO status_change (
+				issue_id,
+				old_status,
+				new_status,
+				change_time
+			)
+			VALUES %s
+			ON CONFLICT (issue_id, change_time, new_status)
+			DO NOTHING;
+		`, strings.Join(values, ","))
 
-	return nil
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return fmt.Errorf("batch insert status_changes: %w", err)
+		}
+
+		return nil
+	})
 }
