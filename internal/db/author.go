@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/JingolBong/jira-connector/pkg/models"
+	"github.com/JingolBong/jira-connector/internal/models"
 )
 
 func (s *Storage) UpsertAuthor(ctx context.Context, a models.Author) (int64, error) {
