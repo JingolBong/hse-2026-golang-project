@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -103,4 +104,30 @@ func (s *Storage) readWithFallback(
 	}
 
 	return fn(s.writeDB)
+}
+
+func (s *Storage) writeTx(
+	ctx context.Context,
+	opts *sql.TxOptions,
+	fn func(tx *sql.Tx) error,
+) (err error) {
+
+	tx, err := s.writeDB.BeginTx(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		} else if err != nil {
+			_ = tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+
+	err = fn(tx)
+	return
 }
