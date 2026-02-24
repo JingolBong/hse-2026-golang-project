@@ -25,7 +25,7 @@ type Issue struct {
 	CreatedAt  time.Time  `db:"created_time" json:"createdTime"`
 	UpdatedAt  *time.Time `db:"updated_time" json:"updatedTime,omitempty"`
 	ClosedAt   *time.Time `db:"closed_time" json:"closedTime,omitempty"`
-	TimeSpent  *int       `db:"time_spent" json:"timeSpent,omitempty"`
+	TimeSpent  *int32     `db:"time_spent" json:"timeSpent,omitempty"`
 	CreatorID  *int64     `db:"creator_id" json:"creatorId,omitempty"`
 	AssigneeID *int64     `db:"assignee_id" json:"assigneeId,omitempty"`
 }
@@ -33,7 +33,7 @@ type Issue struct {
 type StatusChange struct {
 	ID         int64     `db:"id" json:"id"`
 	IssueID    int64     `db:"issue_id" json:"issueId"`
-	OldStatus  string    `db:"old_status" json:"oldStatus"`
-	NewStatus  string    `db:"new_status" json:"newStatus"`
+	OldStatus  *string   `db:"old_status" json:"oldStatus,omitempty"`
+	NewStatus  *string   `db:"new_status" json:"newStatus,omitempty"`
 	ChangeTime time.Time `db:"change_time" json:"changeTime"`
 }

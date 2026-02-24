@@ -15,15 +15,46 @@ func (s *Storage) GetProjectByJiraID(ctx context.Context, jiraID int64) (*models
 	WHERE jira_id = $1;
 	`
 	var projectFound models.Project
-	err := s.db.QueryRowContext(ctx, query, jiraID).Scan(&projectFound.JiraID, &projectFound.Key, &projectFound.Name, &projectFound.URL)
+	err := s.readWithFallback(ctx, func(db *sql.DB) error {
+		return db.QueryRowContext(ctx, query, jiraID).
+			Scan(&projectFound.JiraID, &projectFound.Key, &projectFound.Name, &projectFound.URL)
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("get project by jira_id %d: %w", jiraID, err)
 	}
-
 	return &projectFound, nil
+}
+
+func (s *Storage) GetAllProjects(ctx context.Context) ([]models.Project, error) {
+	const query = `
+	SELECT jira_id, key, name, url
+	FROM project;
+	`
+	var projects []models.Project
+	err := s.readWithFallback(ctx, func(db *sql.DB) error {
+		rows, err := db.QueryContext(ctx, query)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var project models.Project
+			if err := rows.Scan(&project.JiraID, &project.Key, &project.Name, &project.URL); err != nil {
+				return err
+			}
+			projects = append(projects, project)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get all projects: %w", err)
+	}
+
+	return projects, nil
 }
 
 func (s *Storage) GetAuthorByJiraID(ctx context.Context, jiraID int64) (*models.Author, error) {
@@ -33,14 +64,20 @@ func (s *Storage) GetAuthorByJiraID(ctx context.Context, jiraID int64) (*models.
         WHERE jira_id = $1;`
 
 	var author models.Author
-	err := s.db.QueryRowContext(ctx, query, jiraID).
-		Scan(&author.JiraID, &author.Username, &author.Email)
-
+	var email sql.NullString
+	err := s.readWithFallback(ctx, func(db *sql.DB) error {
+		return db.QueryRowContext(ctx, query, jiraID).
+			Scan(&author.JiraID, &author.Username, &email)
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("get author by jira_id %d: %w", jiraID, err)
+	}
+
+	if email.Valid {
+		author.Email = email.String
 	}
 
 	return &author, nil
@@ -54,54 +91,97 @@ func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) (
 	ORDER BY i.created_time ASC;
 	`
 	var issues []models.Issue
-	rows, err := s.db.QueryContext(ctx, query, projectJiraID)
-	if err != nil {
-		return nil, fmt.Errorf("get issues by project jira_id %d: %w", projectJiraID, err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var issue models.Issue
-		err := rows.Scan(&issue.JiraID, &issue.ProjectID, &issue.Key, &issue.Summary, &issue.Status, &issue.Priority,
-			&issue.CreatedAt, &issue.UpdatedAt, &issue.ClosedAt, &issue.TimeSpent, &issue.CreatorID, &issue.AssigneeID)
+	err := s.readWithFallback(ctx, func(db *sql.DB) error {
+		rows, err := db.QueryContext(ctx, query, projectJiraID)
 		if err != nil {
-			return nil, fmt.Errorf("scan issue for project jira_id %d: %w", projectJiraID, err)
+			return err
 		}
-		issues = append(issues, issue)
-	}
+		defer rows.Close()
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+		issues = nil
+		for rows.Next() {
+			var (
+				i          models.Issue
+				updatedAt  sql.NullTime
+				closedAt   sql.NullTime
+				timeSpent  sql.NullInt32
+				creatorID  sql.NullInt64
+				assigneeID sql.NullInt64
+			)
+			if err := rows.Scan(
+				&i.JiraID, &i.ProjectID, &i.Key,
+				&i.Summary, &i.Status, &i.Priority,
+				&i.CreatedAt, &updatedAt, &closedAt,
+				&timeSpent, &creatorID, &assigneeID,
+			); err != nil {
+				return err
+			}
+			if updatedAt.Valid {
+				i.UpdatedAt = &updatedAt.Time
+			}
+			if closedAt.Valid {
+				i.ClosedAt = &closedAt.Time
+			}
+			if timeSpent.Valid {
+				i.TimeSpent = &timeSpent.Int32
+			}
+			if creatorID.Valid {
+				i.CreatorID = &creatorID.Int64
+			}
+			if assigneeID.Valid {
+				i.AssigneeID = &assigneeID.Int64
+			}
+			issues = append(issues, i)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get issues by project_id %d: %w", projectJiraID, err)
 	}
-
 	return issues, nil
 }
 
 func (s *Storage) GetStatusChangesByIssue(ctx context.Context, issueJiraID int64) ([]models.StatusChange, error) {
 	const query = `
-	SELECT sc.id, sc.issue_id, sc.old_status, sc.new_status, sc.change_time
-	FROM status_change sc
-	WHERE sc.issue_id = $1
-	ORDER BY change_time ASC;
-	`
+		SELECT id, issue_id, old_status, new_status, change_time
+		FROM status_change
+		WHERE issue_id = $1
+		ORDER BY change_time ASC`
+
 	var changes []models.StatusChange
-	rows, err := s.db.QueryContext(ctx, query, issueJiraID)
-	if err != nil {
-		return nil, fmt.Errorf("query status changes by issue id %d: %w", issueJiraID, err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var statusChange models.StatusChange
-		if err := rows.Scan(&statusChange.ID, &statusChange.IssueID, &statusChange.OldStatus, &statusChange.NewStatus, &statusChange.ChangeTime); err != nil {
-			return nil, fmt.Errorf("scan status change: %w", err)
+	err := s.readWithFallback(ctx, func(db *sql.DB) error {
+		rows, err := db.QueryContext(ctx, query, issueJiraID)
+		if err != nil {
+			return err
 		}
-		changes = append(changes, statusChange)
-	}
+		defer rows.Close()
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+		changes = nil
+		for rows.Next() {
+			var (
+				sc        models.StatusChange
+				oldStatus sql.NullString
+				newStatus sql.NullString
+			)
+			if err := rows.Scan(
+				&sc.ID, &sc.IssueID,
+				&oldStatus, &newStatus,
+				&sc.ChangeTime,
+			); err != nil {
+				return err
+			}
+			if oldStatus.Valid {
+				sc.OldStatus = &oldStatus.String
+			}
+			if newStatus.Valid {
+				sc.NewStatus = &newStatus.String
+			}
+			changes = append(changes, sc)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get status changes by issue_id %d: %w", issueJiraID, err)
 	}
-
 	return changes, nil
 }
