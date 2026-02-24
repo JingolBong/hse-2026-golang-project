@@ -77,7 +77,7 @@ func (s *Storage) GetAuthorByJiraID(ctx context.Context, jiraID int64) (*models.
 	}
 
 	if email.Valid {
-		author.Email = email.String
+		author.Email = &email.String
 	}
 
 	return &author, nil

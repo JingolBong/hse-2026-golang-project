@@ -1,4 +1,4 @@
-module github.com/JingolBong/jira-connector
+module hse-2026-golang-project
 
 go 1.25.1
 
