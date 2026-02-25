@@ -21,13 +21,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 4G
 
   postgres-replica:
     image: postgres:13.8
     container_name: pg-replica
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
       PGPASSWORD: postgres
     depends_on:
       postgres-master:
@@ -37,17 +39,44 @@ services:
       - ./postgres/replica/postgresql.conf:/etc/postgresql/postgresql.conf
     command: >
       bash -c "
-        until pg_isready -h postgres-master -p 5432; do echo 'Waiting...'; sleep 2; done &&
-        pg_basebackup -h postgres-master -D /var/lib/postgresql/data -U replicator -Fp -Xs -P -R -v &&
-        chmod 0700 /var/lib/postgresql/data &&
-        chown -R postgres:postgres /var/lib/postgresql/data &&
-        gosu postgres postgres -c config_file=/etc/postgresql/postgresql.conf
+        if [ -z \"$(ls -A /var/lib/postgresql/data)\" ]; then
+          echo 'First run: starting pg_basebackup...' &&
+          pg_basebackup -h postgres-master -D /var/lib/postgresql/data -U replicator -Fp -Xs -P -R -v &&
+          chmod 0700 /var/lib/postgresql/data &&
+          chown -R postgres:postgres /var/lib/postgresql/data;
+        else
+          echo 'Data dir exists, skipping pg_basebackup';
+        fi &&
+        exec gosu postgres postgres -c config_file=/etc/postgresql/postgresql.conf
       "
     ports:
       - "5433:5432"
     networks:
       - jira-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
 
+  pgadmin:
+    image: dpage/pgadmin4:5.7
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pguser@mail.ru
+      PGADMIN_DEFAULT_PASSWORD: pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - jira-network
+    depends_on:
+      postgres-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
 
   migrator:
     build:
@@ -70,7 +99,9 @@ services:
       postgres-master:
         condition: service_healthy
       postgres-replica:
-        condition: service_started
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
     volumes:
       - ./configs:/app/configs
     ports:
