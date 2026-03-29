@@ -1,0 +1,47 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE/Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+vendor/
+bin/
+
+# Angular/Node
+web/node_modules/
+web/dist/
+web/.angular/
+web/.sass-cache/
+web/*.tgz
+web/.env
+web/.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment / Secrets
+.env
+.env.*
+*.pem
+credentials.json
+
+# Docker
+postgres/data/
