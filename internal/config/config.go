@@ -2,46 +2,68 @@ package config
 
 import (
 	"fmt"
-	"os"
+	"log"
+	"strings"
 
-	"gopkg.in/yaml.v3"
+	_ "github.com/lib/pq"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Program ProgramSettings `yaml:"program"`
-	WriteDB DBSettings      `yaml:"writeDB"`
-	ReadDB  DBSettings      `yaml:"readDB"`
+	Jira   JiraConfig   `mapstructure:"jira"`
+	Kafka  KafkaConfig  `mapstructure:"kafka"`
+	Server ServerConfig `mapstructure:"server"`
 }
 
-type DBSettings struct {
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Database string `yaml:"database"`
-	SSLMode  string `yaml:"sslmode"`
+type KafkaConfig struct {
+	Brokers []string `mapstructure:"brokers"`
+	Topic   string   `mapstructure:"topic"`
+}
+
+type ServerConfig struct {
+	Port int `mapstructure:"port"`
+}
+
+type JiraConfig struct {
+	Program ProgramSettings `mapstructure:"program"`
+	WriteDB DBConfig        `mapstructure:"writeDB"`
+	ReadDB  DBConfig        `mapstructure:"readDB"`
+}
+
+type DBConfig struct {
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Database string `mapstructure:"database"`
+	SSLMode  string `mapstructure:"sslmode"`
 }
 
 type ProgramSettings struct {
-	JiraURL           string `yaml:"jiraUrl"`
-	ThreadCount       int    `yaml:"threadCount"`
-	IssueInOneRequest int    `yaml:"issueInOneRequest"`
-	MinTimeSleep      int    `yaml:"minTimeSleep"`
-	MaxTimeSleep      int    `yaml:"maxTimeSleep"`
-	Port              int    `yaml:"port"`
+	JiraURL           string `mapstructure:"jiraUrl"`
+	ThreadCount       int    `mapstructure:"threadCount"`
+	IssueInOneRequest int    `mapstructure:"issueInOneRequest"`
+	MinTimeSleep      int    `mapstructure:"minTimeSleep"`
+	MaxTimeSleep      int    `mapstructure:"maxTimeSleep"`
+	Port              int    `mapstructure:"port"`
 }
 
-func LoadConfig(filename string) (*Config, error) {
-	configData, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("while reading config file: %w", err)
+func LoadConfig(path string) (*Config, error) {
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(path)
+
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("Warning: Error reading config file: %v", err)
 	}
 
-	var config Config
-
-	if err := yaml.Unmarshal(configData, &config); err != nil {
-		return nil, fmt.Errorf("while parsing yaml: %w", err)
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("unable to decode into struct: %w", err)
 	}
 
-	return &config, nil
+	return &cfg, nil
 }

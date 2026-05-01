@@ -140,13 +140,19 @@ func LoadProject(
 		}
 	}
 
-	if err := storage.InsertStatusChangesBatch(ctx, allChanges); err != nil {
-		return fmt.Errorf("insert status changes failed: %w", err)
+	const changeBatchSize = 2000
+	for i := 0; i < len(allChanges); i += changeBatchSize {
+		end := i + changeBatchSize
+		if end > len(allChanges) {
+			end = len(allChanges)
+		}
+		if err := storage.InsertStatusChangesBatch(ctx, allChanges[i:end]); err != nil {
+			return fmt.Errorf("insert status changes batch failed: %w", err)
+		}
 	}
 
 	return nil
 }
-
 func transformUser(u User) models.Author {
 	id := hashUsername(u.Name)
 	var email *string

@@ -4,7 +4,7 @@ type JiraProject struct {
 	ID   string `json:"id"`
 	Key  string `json:"key"`
 	Name string `json:"name"`
-	Self string `json:"self"` //url
+	Self string `json:"self"`
 }
 
 type JiraIssues struct {

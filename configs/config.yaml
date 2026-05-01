@@ -1,33 +1,30 @@
-program:
-  jiraUrl: "https://issues.apache.org/jira"
-  threadCount: 5
-  issueInOneRequest: 100
-  minTimeSleep: 100
-  maxTimeSleep: 30000
-  port: 8001
-
-writeDB:
-  host: "postgres-master"
-  port: 5432
-  user: "pguser"
-  password: "pgpwd"
-  database: "testdb"
-  sslmode: "disable"
-
-readDB:
-  host: "postgres-replica"
-  port: 5432
-  user: "pguser"
-  password: "pgpwd"
-  database: "testdb"
-  sslmode: "disable"
+jira:
+  program:
+    jiraUrl: "https://issues.apache.org/jira"
+    threadCount: 5
+    issueInOneRequest: 100
+    minTimeSleep: 100
+    maxTimeSleep: 30000
+    port: 8001
+  writeDB:
+    host: "postgres-master"
+    port: 5432
+    user: "pguser"
+    password: "pgpwd"
+    database: "testdb"
+    sslmode: "disable"
+  readDB:
+    host: "postgres-replica"
+    port: 5432
+    user: "pguser"
+    password: "pgpwd"
+    database: "testdb"
+    sslmode: "disable"
 
 kafka:
   brokers:
     - "kafka:9092"
-  jobTopic: "etl.jobs"
-  resultTopic: "etl.results"
-  groupID: "connector-group"
+  topic: "etl.jobs" 
 
-grpc:
-  connectorAddress: "connector:8001"
+server:
+  port: 8001

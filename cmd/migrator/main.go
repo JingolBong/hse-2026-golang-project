@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,25 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"hse-2026-golang-project/internal/config"
-
 	_ "github.com/lib/pq"
 )
 
 func main() {
 	log.Println("Starting migrator...")
 
-	cfgPath := "configs/config.yaml"
-	cfg, err := config.LoadConfig(cfgPath)
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.WriteDB.Host, cfg.WriteDB.Port, cfg.WriteDB.User,
-		cfg.WriteDB.Password, cfg.WriteDB.Database, cfg.WriteDB.SSLMode)
+	dsn := "host=postgres-master port=5432 user=postgres password=postgres dbname=testdb sslmode=disable"
 
 	var db *sql.DB
+	var err error
+
 	for i := 0; i < 5; i++ {
 		db, err = sql.Open("postgres", dsn)
 		if err == nil {

@@ -2,10 +2,12 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,18 +20,22 @@ import (
 
 type GRPCServer struct {
 	pb.UnimplementedConnectorServiceServer
-	storage *db.Storage
-	client  *JiraClient
-	cfg     config.ProgramSettings
-	log     *logrus.Logger
+	storage    *db.Storage
+	client     *JiraClient
+	cfg        config.ProgramSettings
+	log        *logrus.Logger
+	producer   sarama.SyncProducer
+	kafkaTopic string
 }
 
-func NewGRPCServer(storage *db.Storage, client *JiraClient, cfg config.ProgramSettings, log *logrus.Logger) *GRPCServer {
+func NewGRPCServer(storage *db.Storage, client *JiraClient, cfg config.ProgramSettings, log *logrus.Logger, producer sarama.SyncProducer, topic string) *GRPCServer {
 	return &GRPCServer{
-		storage: storage,
-		client:  client,
-		cfg:     cfg,
-		log:     log,
+		storage:    storage,
+		client:     client,
+		cfg:        cfg,
+		log:        log,
+		producer:   producer,
+		kafkaTopic: topic,
 	}
 }
 
@@ -70,26 +76,23 @@ func (s *GRPCServer) GetProjects(ctx context.Context, req *pb.GetProjectsRequest
 			filtered = append(filtered, p)
 		}
 	}
-	// 1. Безопасная математика для пагинации
+
 	total := len(filtered)
 	totalPages := (total + limit - 1) / limit
 	if totalPages == 0 {
 		totalPages = 1
 	}
 
-	// 2. Гарантируем, что page не может быть меньше 1
 	if page < 1 {
 		page = 1
 	}
 
 	start := (page - 1) * limit
-	if start < 0 { // Дополнительная защита от паники
+	if start < 0 {
 		start = 0
 	}
-
 	end := start + limit
 
-	// 3. Не выходим за границы массива
 	if start > total {
 		start = total
 	}
@@ -153,6 +156,27 @@ func (s *GRPCServer) UpdateProject(ctx context.Context, req *pb.UpdateProjectReq
 	if err := LoadProject(ctx, s.storage, s.client, req.ProjectKey, projectID, s.cfg, s.log); err != nil {
 		s.log.WithError(err).Error("LoadProject failed")
 		return nil, status.Errorf(codes.Internal, "load failed: %v", err)
+	}
+
+	s.log.Info("Sending notification to Kafka...")
+
+	kafkaMessage := map[string]interface{}{
+		"event":     "project_updated",
+		"project":   req.ProjectKey,
+		"status":    "success",
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
+
+	msgBytes, _ := json.Marshal(kafkaMessage)
+	msg := &sarama.ProducerMessage{
+		Topic: s.kafkaTopic,
+		Value: sarama.ByteEncoder(msgBytes),
+	}
+
+	if _, _, err := s.producer.SendMessage(msg); err != nil {
+		s.log.WithError(err).Warn("Failed to send message to Kafka, but ETL succeeded")
+	} else {
+		s.log.Info("Successfully pushed ETL result to Kafka!")
 	}
 
 	s.log.WithField("project", req.ProjectKey).Info("UpdateProject completed")

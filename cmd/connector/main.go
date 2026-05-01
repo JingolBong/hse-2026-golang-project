@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net"
 	"os"
@@ -10,10 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/IBM/sarama"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
 	"hse-2026-golang-project/internal/config"
@@ -22,98 +19,73 @@ import (
 	pb "hse-2026-golang-project/internal/proto/connector"
 )
 
-func initDB(cfg config.DBSettings) (*sql.DB, error) {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.SSLMode)
-
-	database, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return nil, err
-	}
-	if err := database.Ping(); err != nil {
-		return nil, err
-	}
-	return database, nil
-}
-
 func main() {
-	log := connector.NewLogger()
-	log.Info("Starting Jira Connector...")
+	logger := connector.NewLogger()
+	logger.Println("Starting Jira Connector Service...")
 
-	cfgPath := "configs/config.yaml"
-	cfg, err := config.LoadConfig(cfgPath)
+	cfg, err := config.LoadConfig("configs")
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		logger.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	writeDB, err := initDB(cfg.WriteDB)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	logger.Printf("Connecting to Write DB at %s:%d...", cfg.Jira.WriteDB.Host, cfg.Jira.WriteDB.Port)
+	writeDB, err := config.NewDB(ctx, cfg.Jira.WriteDB)
 	if err != nil {
-		log.Fatalf("Failed to connect to Write DB: %v", err)
+		logger.Fatalf("Write DB connection failed: %v", err)
 	}
 	defer writeDB.Close()
+	logger.Println("Write DB connected successfully!")
 
-	readDB, err := initDB(cfg.ReadDB)
+	logger.Printf("Connecting to Read DB at %s:%d...", cfg.Jira.ReadDB.Host, cfg.Jira.ReadDB.Port)
+	readDB, err := config.NewDB(ctx, cfg.Jira.ReadDB)
 	if err != nil {
-		log.Fatalf("Failed to connect to Read DB: %v", err)
+		logger.Fatalf("Read DB connection failed: %v", err)
 	}
 	defer readDB.Close()
+	logger.Println("Read DB connected successfully!")
+
+	logger.Printf("Initializing Kafka Producer (Brokers: %v, Topic: %s)...", cfg.Kafka.Brokers, cfg.Kafka.Topic)
+	kafkaCfg := sarama.NewConfig()
+	kafkaCfg.Producer.Return.Successes = true
+	producer, err := sarama.NewSyncProducer(cfg.Kafka.Brokers, kafkaCfg)
+	if err != nil {
+		logger.Fatalf("Failed to start Sarama producer: %v", err)
+	}
+	defer producer.Close()
 
 	storage := db.NewStorage(writeDB, readDB)
+	jiraClient := connector.NewJiraClient(cfg.Jira.Program, logger)
 
-	jiraClient := connector.NewJiraClient(cfg.Program, log)
-	grpcServerInstance := connector.NewGRPCServer(storage, jiraClient, cfg.Program, log)
-
-	server := grpc.NewServer(
-		grpc.UnaryInterceptor(func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-			start := time.Now()
-
-			defer func() {
-				if r := recover(); r != nil {
-					err = fmt.Errorf("panic in gRPC handler: %v", r)
-					log.WithFields(map[string]interface{}{
-						"method": info.FullMethod,
-						"panic":  r,
-					}).Error("CRITICAL PANIC RECOVERED")
-				}
-			}()
-
-			resp, err = handler(ctx, req)
-
-			log.WithFields(map[string]interface{}{
-				"method":   info.FullMethod,
-				"duration": time.Since(start).String(),
-				"error":    err,
-			}).Info("gRPC call")
-			return resp, err
-		}),
-	)
-
-	pb.RegisterConnectorServiceServer(server, grpcServerInstance)
-
-	healthSrv := health.NewServer()
-	grpc_health_v1.RegisterHealthServer(server, healthSrv)
-	healthSrv.SetServingStatus("connector", grpc_health_v1.HealthCheckResponse_SERVING)
-
-	reflection.Register(server)
-
-	port := fmt.Sprintf(":%d", cfg.Program.Port)
+	port := fmt.Sprintf(":%d", cfg.Jira.Program.Port)
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		logger.Fatalf("Failed to listen on port %s: %v", port, err)
 	}
 
+	grpcServer := grpc.NewServer()
+
+	connectorService := connector.NewGRPCServer(storage, jiraClient, cfg.Jira.Program, logger, producer, cfg.Kafka.Topic)
+	pb.RegisterConnectorServiceServer(grpcServer, connectorService)
+
+	reflection.Register(grpcServer)
+
 	go func() {
-		log.Infof("gRPC server listening on port %s", port)
-		if err := server.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve gRPC: %v", err)
+		logger.Printf("gRPC server listening on port %s", port)
+		if err := grpcServer.Serve(lis); err != nil {
+			logger.Fatalf("Failed to serve gRPC: %v", err)
 		}
 	}()
+
+	logger.Println("Service is up and running!")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Info("Shutting down gRPC server...")
-	server.GracefulStop()
-	log.Info("Server stopped.")
+	logger.Println("Shutting down service...")
+	grpcServer.GracefulStop()
+	logger.Println("Done.")
 }
