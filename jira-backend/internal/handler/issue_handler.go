@@ -35,7 +35,7 @@ func (h *IssueHandler) GetByProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := writeJSON(w, http.StatusOK, data); err != nil {
+	if err := writeData(w, http.StatusOK, data); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }

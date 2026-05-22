@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"net/http"
+	"os"
 
 	_ "github.com/lib/pq"
 
@@ -58,7 +59,12 @@ func main() {
 	issueHandler := handler.NewIssueHandler(issueService)
 	graphHandler := handler.NewGraphHandler(graphService)
 
-	router := app.NewRouter(projectHandler, issueHandler, graphHandler)
+	corsOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
+	if corsOrigin == "" {
+		corsOrigin = "http://localhost:4200"
+	}
+
+	router := app.NewRouter(projectHandler, issueHandler, graphHandler, corsOrigin)
 
 	logger.Println("Server started on :8000")
 	logger.Fatal(http.ListenAndServe(":8000", router))

@@ -50,6 +50,28 @@ func (s *Storage) GetProjectByKey(ctx context.Context, key string) (*models.Proj
 	return &projectFound, nil
 }
 
+func (s *Storage) GetProjectByName(ctx context.Context, name string) (*models.Project, error) {
+	const query = `
+	SELECT jira_id, key, name, url
+	FROM project
+	WHERE name = $1;
+	`
+
+	var projectFound models.Project
+	err := s.readWithFallback(ctx, func(db *sql.DB) error {
+		return db.QueryRowContext(ctx, query, name).
+			Scan(&projectFound.JiraID, &projectFound.Key, &projectFound.Name, &projectFound.URL)
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get project by name %q: %w", name, err)
+	}
+
+	return &projectFound, nil
+}
+
 func (s *Storage) GetAllProjects(ctx context.Context) ([]models.Project, error) {
 	const query = `
 	SELECT jira_id, key, name, url
@@ -161,6 +183,52 @@ func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) (
 		return nil, fmt.Errorf("get issues by project_id %d: %w", projectJiraID, err)
 	}
 	return issues, nil
+}
+
+func (s *Storage) GetStatusChangesByProject(ctx context.Context, projectJiraID int64) ([]models.StatusChange, error) {
+	const query = `
+		SELECT sc.id, sc.issue_id, sc.old_status, sc.new_status, sc.change_time
+		FROM status_change sc
+		JOIN issue i ON i.jira_id = sc.issue_id
+		WHERE i.project_id = $1
+		ORDER BY sc.issue_id, sc.change_time ASC`
+
+	var changes []models.StatusChange
+	err := s.readWithFallback(ctx, func(db *sql.DB) error {
+		rows, err := db.QueryContext(ctx, query, projectJiraID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		changes = nil
+		for rows.Next() {
+			var (
+				sc        models.StatusChange
+				oldStatus sql.NullString
+				newStatus sql.NullString
+			)
+			if err := rows.Scan(
+				&sc.ID, &sc.IssueID,
+				&oldStatus, &newStatus,
+				&sc.ChangeTime,
+			); err != nil {
+				return err
+			}
+			if oldStatus.Valid {
+				sc.OldStatus = &oldStatus.String
+			}
+			if newStatus.Valid {
+				sc.NewStatus = &newStatus.String
+			}
+			changes = append(changes, sc)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get status changes by project_id %d: %w", projectJiraID, err)
+	}
+	return changes, nil
 }
 
 func (s *Storage) GetStatusChangesByIssue(ctx context.Context, issueJiraID int64) ([]models.StatusChange, error) {
