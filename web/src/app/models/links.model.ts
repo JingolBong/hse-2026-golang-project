@@ -1,3 +1,5 @@
-export interface Links {
-  href: string
+export interface HateoasLink {
+  href: string;
 }
+
+export type Links = Record<string, HateoasLink>;

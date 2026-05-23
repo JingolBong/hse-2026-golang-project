@@ -17,6 +17,7 @@ import {CompareProjectPageComponent } from './compare-project-page/compare-proje
 import {ChartModule} from "angular-highcharts";
 import {CheckboxWithSettingsComponent} from "./components/checkbox-with-settings/checkbox-with-settings.component";
 import { ProjectStatPageComponent } from './project-stat-page/project-stat-page.component';
+import { IssuesPageComponent } from './issues-page/issues-page.component';
 import { ConfigurationService } from "./services/configuration.services";
 
 export function initApp(configurationService: ConfigurationService) {
@@ -27,6 +28,7 @@ export function initApp(configurationService: ConfigurationService) {
 const routes = [
   {path: '', component: HomePageComponent},
   {path: 'projects', component: ProjectPageComponent},
+  {path: 'issues', component: IssuesPageComponent},
   {path: 'compare', component: ComparePageComponent},
   {path: 'myprojects', component: MyProjectPageComponent},
   {path: 'compare-projects', component: CompareProjectPageComponent},
@@ -46,7 +48,8 @@ const routes = [
     ProjectWithCheckboxComponent,
     CompareProjectPageComponent,
     CheckboxWithSettingsComponent,
-    ProjectStatPageComponent
+    ProjectStatPageComponent,
+    IssuesPageComponent
   ],
   imports: [
     BrowserModule,

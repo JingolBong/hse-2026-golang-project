@@ -1,0 +1,30 @@
+.picker {
+  margin: 1em 0;
+}
+
+.picker select {
+  margin-left: 0.5em;
+  padding: 0.25em 0.5em;
+}
+
+.issues {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.issues th,
+.issues td {
+  border: 1px solid #d0d0d0;
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.issues th {
+  background: #f3f3f3;
+}
+
+.error {
+  color: #b00;
+  margin: 1em 0;
+}

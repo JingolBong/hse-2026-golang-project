@@ -1,28 +1,30 @@
-import { Injectable } from '@angular/core';
+import {Injectable} from "@angular/core";
 import {HttpClient} from "@angular/common/http";
-import {mapTo, Observable, tap} from "rxjs";
+import {Observable, map} from "rxjs";
+import {load as parseYaml} from "js-yaml";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class ConfigurationService {
-
-  private configuration = {};
+  private configuration: Record<string, unknown> = {};
 
   constructor(private httpClient: HttpClient) {
   }
 
   load(): Observable<void> {
-    return this.httpClient.get('/assets/config.json')
+    return this.httpClient
+      .get("/assets/config.yaml", {responseType: "text"})
       .pipe(
-        tap((configuration: any) => this.configuration = configuration),
-        mapTo(undefined),
+        map(raw => {
+          const parsed = parseYaml(raw) as Record<string, unknown> | null;
+          this.configuration = parsed ?? {};
+        }),
       );
   }
 
-  getValue(key: string, defaultValue?: any): any {
-    // @ts-ignore
-    return this.configuration[key] || defaultValue;
+  getValue<T = unknown>(key: string, defaultValue?: T): T {
+    const value = this.configuration[key];
+    return (value === undefined || value === null ? defaultValue : value) as T;
   }
-
 }

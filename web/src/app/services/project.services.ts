@@ -6,28 +6,35 @@ import {IRequestObject} from "../models/requestObj.model";
 import {ConfigurationService} from "./configuration.services";
 
 @Injectable({
-    providedIn: 'root'
+  providedIn: "root",
 })
 export class ProjectServices {
-  urlPath = ""
+  private readonly apiBase: string;
 
-  constructor(private http: HttpClient, private configurationService: ConfigurationService) {
-    this.urlPath = configurationService.getValue("pathUrl")
+  constructor(private http: HttpClient, configurationService: ConfigurationService) {
+    const host = configurationService.getValue<string>("host", "localhost");
+    const port = configurationService.getValue<number>("port", 8000);
+    this.apiBase = `http://${host}:${port}/api/v1`;
   }
 
-  getAll(page: number, searchName: String): Observable<IRequest>{
-    return this.http.get<IRequest>(
-      `http://${this.urlPath}/projects?page=${page}&limit=10&search=${encodeURIComponent(searchName as string)}`
-    );
+  getAll(page: number, searchName: String): Observable<IRequest> {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: "10",
+      search: String(searchName ?? ""),
+    });
+    return this.http.get<IRequest>(`${this.apiBase}/connector/projects?${params.toString()}`);
   }
 
-  addProject(key: String): Observable<IRequestObject>{
+  addProject(key: String): Observable<IRequestObject> {
+    const params = new URLSearchParams({project: String(key)});
     return this.http.post<IRequestObject>(
-      `http://${this.urlPath}/projects/${encodeURIComponent(key as string)}/update`, {}
+      `${this.apiBase}/connector/updateProject?${params.toString()}`,
+      {},
     );
   }
 
   deleteProject(id: Number): Observable<IRequestObject> {
-    return this.http.delete<IRequestObject>(`http://${this.urlPath}/projects/${id}`);
+    return this.http.delete<IRequestObject>(`${this.apiBase}/projects/${id}`);
   }
 }

@@ -20,12 +20,14 @@ export class CompareProjectPageComponent implements OnInit {
 
   webUrl = ""
 
-  constructor(private configurationService: ConfigurationService,
+  constructor(configurationService: ConfigurationService,
               private route: ActivatedRoute,
               private dbProjectService: DatabaseProjectServices) {
     this.projects = this.route.snapshot.queryParamMap.getAll("keys")
     this.ids = this.route.snapshot.queryParamMap.getAll("value")
-    this.webUrl = configurationService.getValue("webUrl")
+    const host = configurationService.getValue<string>("webHost", "localhost");
+    const port = configurationService.getValue<number>("webPort", 4200);
+    this.webUrl = `${host}:${port}`;
   }
 
 

@@ -18,8 +18,10 @@ export class ComparePageComponent implements OnInit {
   inited: boolean = false
 
   webUrl = ""
-  constructor(private configurationService: ConfigurationService, private myProjectService: DatabaseProjectServices, private router: Router) {
-    this.webUrl = configurationService.getValue("webUrl")
+  constructor(configurationService: ConfigurationService, private myProjectService: DatabaseProjectServices, private router: Router) {
+    const host = configurationService.getValue<string>("webHost", "localhost");
+    const port = configurationService.getValue<number>("webPort", 4200);
+    this.webUrl = `${host}:${port}`;
   }
 
 

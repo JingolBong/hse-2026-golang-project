@@ -1,0 +1,43 @@
+<h2><strong>Задачи</strong></h2>
+
+<div *ngIf="projects.length === 0 && !error">Нет загруженных проектов. Добавьте проект на странице «Проекты».</div>
+<div *ngIf="error" class="error">{{ error }}</div>
+
+<div class="picker" *ngIf="projects.length > 0">
+  <label for="project-select">Проект:</label>
+  <select id="project-select" [(ngModel)]="selectedKey" (change)="selectProject(selectedKey!)">
+    <option [ngValue]="null" disabled>— выберите проект —</option>
+    <option *ngFor="let p of projects" [ngValue]="p.Key">{{ p.Name }} ({{ p.Key }})</option>
+  </select>
+</div>
+
+<div *ngIf="loading">Загрузка…</div>
+
+<table *ngIf="loaded && issues.length > 0" class="issues">
+  <thead>
+  <tr>
+    <th>Ключ</th>
+    <th>Тип</th>
+    <th>Приоритет</th>
+    <th>Статус</th>
+    <th>Краткое описание</th>
+    <th>Создано</th>
+    <th>Закрыто</th>
+    <th>Исполнитель</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr *ngFor="let issue of issues">
+    <td>{{ issue.Key }}</td>
+    <td>{{ issue.Type }}</td>
+    <td>{{ issue.Priority }}</td>
+    <td>{{ issue.Status }}</td>
+    <td>{{ issue.Summary }}</td>
+    <td>{{ issue.CreatedTime }}</td>
+    <td>{{ issue.ClosedTime }}</td>
+    <td>{{ issue.Assignee }}</td>
+  </tr>
+  </tbody>
+</table>
+
+<div *ngIf="loaded && issues.length === 0">В выбранном проекте нет задач.</div>

@@ -6,57 +6,59 @@ import {IRequestObject} from "../models/requestObj.model";
 import {ConfigurationService} from "./configuration.services";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class DatabaseProjectServices {
-  urlPath = ""
+  private readonly apiBase: string;
 
-  constructor(private http: HttpClient, private configurationService: ConfigurationService) {
-    this.urlPath = configurationService.getValue("pathUrl")
+  constructor(private http: HttpClient, configurationService: ConfigurationService) {
+    const host = configurationService.getValue<string>("host", "localhost");
+    const port = configurationService.getValue<number>("port", 8000);
+    this.apiBase = `http://${host}:${port}/api/v1`;
   }
 
-  getAll(): Observable<IRequest>{
-    return this.http.get<IRequest>(`http://${this.urlPath}/myprojects`);
+  getAll(): Observable<IRequest> {
+    return this.http.get<IRequest>(`${this.apiBase}/projects`);
   }
 
   getProjectStatByID(id: string): Observable<IRequestObject> {
-    return this.http.get<IRequestObject>(`http://${this.urlPath}/myprojects/${id}/stat`);
+    return this.http.get<IRequestObject>(`${this.apiBase}/projects/${id}`);
+  }
+
+  getIssuesByProject(projectKey: string): Observable<IRequest> {
+    const params = new URLSearchParams({project: projectKey});
+    return this.http.get<IRequest>(`${this.apiBase}/issues?${params.toString()}`);
   }
 
   getComplitedGraph(taskNumber: string, projectName: Array<string>): Observable<IRequestObject> {
-    const projects = projectName.map(p => 'projects=' + encodeURIComponent(p)).join('&');
+    const params = new URLSearchParams({project: projectName.join(",")});
     return this.http.get<IRequestObject>(
-      `http://${this.urlPath}/graph/compare?task=${taskNumber}&${projects}`
+      `${this.apiBase}/compare/${taskNumber}?${params.toString()}`,
     );
   }
 
   getGraph(taskNumber: string, projectName: string): Observable<IRequestObject> {
+    const params = new URLSearchParams({project: projectName});
     return this.http.get<IRequestObject>(
-      `http://${this.urlPath}/graph?task=${taskNumber}&project=${encodeURIComponent(projectName)}`
+      `${this.apiBase}/graph/get/${taskNumber}?${params.toString()}`,
     );
   }
 
   makeGraph(taskNumber: string, projectName: string): Observable<IRequestObject> {
+    const params = new URLSearchParams({project: projectName});
     return this.http.post<IRequestObject>(
-      `http://${this.urlPath}/graph?task=${taskNumber}&project=${encodeURIComponent(projectName)}`, {}
+      `${this.apiBase}/graph/make/${taskNumber}?${params.toString()}`,
+      {},
     );
   }
 
   deleteGraphs(projectName: string): Observable<IRequestObject> {
-    return this.http.delete<IRequestObject>(
-      `http://${this.urlPath}/graphs?project=${encodeURIComponent(projectName)}`
-    );
+    const params = new URLSearchParams({project: projectName});
+    return this.http.delete<IRequestObject>(`${this.apiBase}/graph/delete?${params.toString()}`);
   }
 
-  isAnalyzed(projectName: string): Observable<IRequestObject>{
-    return this.http.get<IRequestObject>(
-      `http://${this.urlPath}/isAnalyzed?project=${encodeURIComponent(projectName)}`
-    );
-  }
-
-  isEmpty(projectName: string): Observable<IRequestObject>{
-    return this.http.get<IRequestObject>(
-      `http://${this.urlPath}/isEmpty?project=${encodeURIComponent(projectName)}`
-    );
+  isAnalyzed(projectName: string): Observable<IRequestObject> {
+    const params = new URLSearchParams({project: projectName});
+    return this.http.get<IRequestObject>(`${this.apiBase}/isAnalyzed?${params.toString()}`);
   }
 }

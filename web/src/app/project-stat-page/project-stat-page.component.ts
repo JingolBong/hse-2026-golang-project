@@ -32,10 +32,12 @@ export class ProjectStatPageComponent implements OnInit {
   closeTaskPriorityChart = new Chart()
 
   webUrl = ""
-  constructor(private configurationService: ConfigurationService, private route: ActivatedRoute, private dbProjectService: DatabaseProjectServices) {
+  constructor(configurationService: ConfigurationService, private route: ActivatedRoute, private dbProjectService: DatabaseProjectServices) {
     this.projects = this.route.snapshot.queryParamMap.getAll("keys")
     this.ids = this.route.snapshot.queryParamMap.getAll("value")
-    this.webUrl = configurationService.getValue("webUrl")
+    const host = configurationService.getValue<string>("webHost", "localhost");
+    const port = configurationService.getValue<number>("webPort", 4200);
+    this.webUrl = `${host}:${port}`;
   }
 
   ngOnInit(): void {

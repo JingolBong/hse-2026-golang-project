@@ -59,12 +59,8 @@ export class MyProjectComponent implements OnInit{
   }
 
   async processProject() {
-    this.dbProjectService.isEmpty(this.myProject.Name.toString()).subscribe(resp => {
-      if (resp.data["isEmpty"]){
-        alert("Project is empty, analytical tasks are not available")
-        return
-      }
-      this.dbProjectService.deleteGraphs(this.myProject.Name.toString()).subscribe(info => {
+    this.dbProjectService.deleteGraphs(this.myProject.Name.toString()).subscribe({
+      next: () => {
         this.complited = 0;
         this.checked = 0;
         this.checkboxes.forEach((box: SettingBox) => {
@@ -74,13 +70,21 @@ export class MyProjectComponent implements OnInit{
         })
         for (const box of this.checkboxes) {
           if (box.Checked) {
-            this.dbProjectService.makeGraph(box.BoxId.toString(), this.myProject.Name.toString()).subscribe(info => {
-              this.complited++;
+            this.dbProjectService.makeGraph(box.BoxId.toString(), this.myProject.Name.toString()).subscribe({
+              next: () => {
+                this.complited++;
+              },
+              error: err => {
+                this.complited++;
+                if (err?.status === 422 || err?.error?.message?.includes("empty")) {
+                  alert("Project is empty, analytical tasks are not available")
+                }
+              },
             })
           }
         }
         this.processed = true
-      })
+      },
     })
   }
 
