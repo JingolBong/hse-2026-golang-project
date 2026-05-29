@@ -11,10 +11,10 @@ import (
 )
 
 type GraphHandler struct {
-	service *service.GraphService
+	service graphService
 }
 
-func NewGraphHandler(s *service.GraphService) *GraphHandler {
+func NewGraphHandler(s graphService) *GraphHandler {
 	return &GraphHandler{service: s}
 }
 

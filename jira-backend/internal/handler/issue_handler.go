@@ -11,10 +11,10 @@ import (
 )
 
 type IssueHandler struct {
-	service *service.IssueService
+	service issueService
 }
 
-func NewIssueHandler(s *service.IssueService) *IssueHandler {
+func NewIssueHandler(s issueService) *IssueHandler {
 	return &IssueHandler{service: s}
 }
 

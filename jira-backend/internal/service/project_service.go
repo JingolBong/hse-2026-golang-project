@@ -5,24 +5,29 @@ import (
 	"fmt"
 
 	"hse-2026-golang-project/internal/models"
-	"hse-2026-golang-project/jira-backend/internal/repository"
 
 	pb "hse-2026-golang-project/internal/proto/connector"
 
 	"github.com/sirupsen/logrus"
 )
 
-type ProjectService struct {
-	repo *repository.ProjectRepository
-	grpcClient pb.ConnectorServiceClient
-	log *logrus.Logger
+type projectRepo interface {
+	GetAll(ctx context.Context) ([]models.Project, error)
+	GetByID(ctx context.Context, id int64) (*models.Project, error)
+	GetIssuesByProject(ctx context.Context, id int64) ([]models.Issue, error)
 }
 
-func NewProjectService(repo *repository.ProjectRepository, client pb.ConnectorServiceClient, log *logrus.Logger) *ProjectService {
+type ProjectService struct {
+	repo       projectRepo
+	grpcClient pb.ConnectorServiceClient
+	log        *logrus.Logger
+}
+
+func NewProjectService(repo projectRepo, client pb.ConnectorServiceClient, log *logrus.Logger) *ProjectService {
 	return &ProjectService{
-		repo: repo,
+		repo:       repo,
 		grpcClient: client,
-		log: log,
+		log:        log,
 	}
 }
 
@@ -86,11 +91,9 @@ func (s *ProjectService) GetCatalog(ctx context.Context, page, limit int, search
 	return result, nil
 }
 
-
-
 func (s *ProjectService) Delete(ctx context.Context, id int64) error {
 	req := &pb.DeleteProjectRequest{ProjectId: id}
-	
+
 	_, err := s.grpcClient.DeleteProject(ctx, req)
 	if err != nil {
 		return fmt.Errorf("Error deleting a project via the connector: %w", err)

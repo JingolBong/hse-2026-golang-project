@@ -5,16 +5,20 @@ import (
 	"errors"
 
 	"hse-2026-golang-project/internal/models"
-	"hse-2026-golang-project/jira-backend/internal/repository"
 )
 
 var ErrProjectNotFound = errors.New("project not found")
 
-type IssueService struct {
-	repo *repository.ProjectRepository
+type issueRepo interface {
+	GetByKey(ctx context.Context, key string) (*models.Project, error)
+	GetIssuesByProject(ctx context.Context, id int64) ([]models.Issue, error)
 }
 
-func NewIssueService(repo *repository.ProjectRepository) *IssueService {
+type IssueService struct {
+	repo issueRepo
+}
+
+func NewIssueService(repo issueRepo) *IssueService {
 	return &IssueService{repo: repo}
 }
 

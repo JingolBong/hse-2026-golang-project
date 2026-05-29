@@ -9,10 +9,16 @@ import (
 	"time"
 
 	"hse-2026-golang-project/internal/models"
-	"hse-2026-golang-project/jira-backend/internal/repository"
 )
 
 var ErrUnsupportedTask = errors.New("unsupported graph task")
+
+type graphRepo interface {
+	GetByKey(ctx context.Context, key string) (*models.Project, error)
+	GetByName(ctx context.Context, name string) (*models.Project, error)
+	GetIssuesByProject(ctx context.Context, id int64) ([]models.Issue, error)
+	GetStatusChangesByProject(ctx context.Context, id int64) ([]models.StatusChange, error)
+}
 
 var (
 	dayBins6     = []string{"0-1d", "1-3d", "3-7d", "7-14d", "14-30d", ">30d"}
@@ -22,12 +28,12 @@ var (
 )
 
 type GraphService struct {
-	repo     *repository.ProjectRepository
+	repo     graphRepo
 	mu       sync.RWMutex
 	analyzed map[string]bool
 }
 
-func NewGraphService(repo *repository.ProjectRepository) *GraphService {
+func NewGraphService(repo graphRepo) *GraphService {
 	return &GraphService{
 		repo:     repo,
 		analyzed: make(map[string]bool),
@@ -60,7 +66,7 @@ type compareHistogram struct {
 
 func validTask(task int) bool { return task >= 1 && task <= 6 }
 
-func resolveProject(ctx context.Context, repo *repository.ProjectRepository, ref string) (*models.Project, error) {
+func resolveProject(ctx context.Context, repo graphRepo, ref string) (*models.Project, error) {
 	p, err := repo.GetByKey(ctx, ref)
 	if err != nil {
 		return nil, err

@@ -16,14 +16,14 @@ import (
 const defaultPageLimit = 10
 
 type ProjectHandler struct {
-	service *service.ProjectService
+	service projectService
 	log     *logrus.Logger
 }
 
-func NewProjectHandler(s *service.ProjectService, log *logrus.Logger) *ProjectHandler {
+func NewProjectHandler(s projectService, log *logrus.Logger) *ProjectHandler {
 	return &ProjectHandler{
 		service: s,
-		log: log,
+		log:     log,
 	}
 }
 
