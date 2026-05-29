@@ -160,20 +160,7 @@ func (s *GRPCServer) UpdateProject(ctx context.Context, req *pb.UpdateProjectReq
 
 	s.log.Info("Sending notification to Kafka...")
 
-	kafkaMessage := map[string]interface{}{
-		"event":     "project_updated",
-		"project":   req.ProjectKey,
-		"status":    "success",
-		"timestamp": time.Now().Format(time.RFC3339),
-	}
-
-	msgBytes, _ := json.Marshal(kafkaMessage)
-	msg := &sarama.ProducerMessage{
-		Topic: s.kafkaTopic,
-		Value: sarama.ByteEncoder(msgBytes),
-	}
-
-	if _, _, err := s.producer.SendMessage(msg); err != nil {
+	if err := s.publishProjectUpdated(req.ProjectKey); err != nil {
 		s.log.WithError(err).Warn("Failed to send message to Kafka, but ETL succeeded")
 	} else {
 		s.log.Info("Successfully pushed ETL result to Kafka!")
@@ -185,6 +172,26 @@ func (s *GRPCServer) UpdateProject(ctx context.Context, req *pb.UpdateProjectReq
 		Status:  "ok",
 		Project: req.ProjectKey,
 	}, nil
+}
+
+func (s *GRPCServer) publishProjectUpdated(projectKey string) error {
+	kafkaMessage := map[string]interface{}{
+		"event":     "project_updated",
+		"project":   projectKey,
+		"status":    "success",
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
+
+	msgBytes, err := json.Marshal(kafkaMessage)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = s.producer.SendMessage(&sarama.ProducerMessage{
+		Topic: s.kafkaTopic,
+		Value: sarama.ByteEncoder(msgBytes),
+	})
+	return err
 }
 
 func (s *GRPCServer) DeleteProject(ctx context.Context, req *pb.DeleteProjectRequest) (*pb.DeleteProjectResponse, error) {
