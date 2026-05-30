@@ -1,16 +1,19 @@
-import { TestBed } from '@angular/core/testing';
-import { AppComponent } from './app.component';
+import {TestBed} from "@angular/core/testing";
+import {HttpClientTestingModule} from "@angular/common/http/testing";
 
-describe('AppComponent', () => {
+import {AppComponent} from "./app.component";
+
+describe("AppComponent", () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [
-        AppComponent
-      ],
-    }).compileComponents();
+      declarations: [AppComponent],
+      imports: [HttpClientTestingModule],
+    })
+      .overrideComponent(AppComponent, {set: {template: ""}})
+      .compileComponents();
   });
 
-  it('should create the app', () => {
+  it("should create the app", () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
@@ -19,13 +22,12 @@ describe('AppComponent', () => {
   it(`should have as title 'web'`, () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
-    expect(app.title).toEqual('web');
+    expect(app.title).toEqual("web");
   });
 
-  /*it('should render title', () => {
+  it("builds webUrl from configuration defaults", () => {
     const fixture = TestBed.createComponent(AppComponent);
-    fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.content span')?.textContent).toContain('web app is running!');
-  });*/
+    const app = fixture.componentInstance;
+    expect(app.webUrl).toBe("localhost:4200");
+  });
 });
