@@ -1,23 +1,34 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {ComponentFixture, TestBed} from "@angular/core/testing";
+import {HttpClientTestingModule, HttpTestingController} from "@angular/common/http/testing";
+import {RouterTestingModule} from "@angular/router/testing";
 
-import { ProjectStatPageComponent } from './project-stat-page.component';
+import {ProjectStatPageComponent} from "./project-stat-page.component";
+import {DatabaseProjectServices} from "../services/database-project.services";
 
-describe('ProjectStatPageComponent', () => {
+describe("ProjectStatPageComponent", () => {
   let component: ProjectStatPageComponent;
   let fixture: ComponentFixture<ProjectStatPageComponent>;
+  let httpMock: HttpTestingController;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [ ProjectStatPageComponent ]
+      declarations: [ProjectStatPageComponent],
+      imports: [HttpClientTestingModule, RouterTestingModule],
+      providers: [DatabaseProjectServices],
     })
-    .compileComponents();
+      .overrideComponent(ProjectStatPageComponent, {set: {template: ""}})
+      .compileComponents();
 
     fixture = TestBed.createComponent(ProjectStatPageComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
-  it('should create', () => {
+  afterEach(() => httpMock.verify());
+
+  it("should create (no query params -> empty selection)", () => {
     expect(component).toBeTruthy();
+    expect(component.projects).toEqual([]);
+    expect(component.ids).toEqual([]);
   });
 });

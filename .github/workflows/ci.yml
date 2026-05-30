@@ -67,6 +67,27 @@ jobs:
       - name: Run integration tests
         run: go test -tags=integration -count=1 -timeout 900s ./...
 
+  frontend-test:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests (headless Chrome)
+        run: npm run test:ci
+
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest

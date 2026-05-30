@@ -1,40 +1,55 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {ComponentFixture, TestBed} from "@angular/core/testing";
+import {HttpClientTestingModule, HttpTestingController} from "@angular/common/http/testing";
 
-import { ProjectPageComponent } from './project-page.component';
+import {ProjectPageComponent} from "./project-page.component";
 import {ProjectServices} from "../services/project.services";
-import {HttpClient} from "@angular/common/http";
-import {HttpClientTestingModule} from "@angular/common/http/testing";
-import {SearchPipe} from "../pipes/search.pipe";
 
-describe('ProjectPageComponent', () => {
+describe("ProjectPageComponent", () => {
   let component: ProjectPageComponent;
-  let httpClient: HttpClient;
-  let search_name: SearchPipe;
   let fixture: ComponentFixture<ProjectPageComponent>;
+  let httpMock: HttpTestingController;
+  const base = "http://localhost:8000/api/v1";
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [
-        ProjectPageComponent,
-        SearchPipe
-      ],
-      providers: [
-        ProjectServices,
-      ],
-      imports: [
-        HttpClientTestingModule
-      ]
+      declarations: [ProjectPageComponent],
+      imports: [HttpClientTestingModule],
+      providers: [ProjectServices],
     })
-    .compileComponents();
+      .overrideComponent(ProjectPageComponent, {set: {template: ""}})
+      .compileComponents();
 
     fixture = TestBed.createComponent(ProjectPageComponent);
-    httpClient = TestBed.get(HttpClient);
     component = fixture.componentInstance;
-    search_name = new SearchPipe();
-    fixture.detectChanges();
+    httpMock = TestBed.inject(HttpTestingController);
   });
 
-  it('should create', () => {
+  afterEach(() => httpMock.verify());
+
+  it("should create", () => {
     expect(component).toBeTruthy();
+  });
+
+  it("ngOnInit loads the first page and clears the loading flag", () => {
+    fixture.detectChanges();
+
+    const req = httpMock.expectOne(r => r.url.split("?")[0] === `${base}/connector/projects`);
+    expect(req.request.urlWithParams).toContain("page=1");
+    req.flush({data: [{Key: "ABC"}], pageInfo: {currentPage: 1, projectsCount: 1}});
+
+    expect(component.loading).toBeFalse();
+    expect(component.projects.length).toBe(1);
+    expect(component.pageInfo.currentPage).toBe(1);
+  });
+
+  it("gty() reloads the requested page", () => {
+    component.gty(3);
+
+    const req = httpMock.expectOne(r => r.url.split("?")[0] === `${base}/connector/projects`);
+    expect(req.request.urlWithParams).toContain("page=3");
+    req.flush({data: [], pageInfo: {currentPage: 3, projectsCount: 0}});
+
+    expect(component.pageInfo.currentPage).toBe(3);
+    expect(component.loading).toBeFalse();
   });
 });
