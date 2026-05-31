@@ -141,7 +141,18 @@ services:
       - "8000:8000"
     networks:
       - jira-network
-      
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    depends_on:
+      - backend
+    ports:
+      - "4200:80"
+    networks:
+      - jira-network
+
 volumes:
   master_data:
   replica_data:
