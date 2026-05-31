@@ -73,4 +73,32 @@ describe("HateoasService", () => {
 
     expect(error).toBeInstanceOf(Error);
   });
+
+  it("resolveTemplate() substitutes path params in the href", () => {
+    let href: string | undefined;
+    service.resolveTemplate("graphGet", {task: 3}).subscribe(h => (href = h));
+
+    httpMock
+      .expectOne(discovery)
+      .flush({_links: {graphGet: {href: "http://localhost:8000/api/v1/graph/get/{task}"}}});
+
+    expect(href).toBe("http://localhost:8000/api/v1/graph/get/3");
+  });
+
+  it("does not cache a failed discovery so the next call retries", () => {
+    service.resolve("projects").subscribe({next: () => fail("expected an error"), error: () => {}});
+    httpMock.expectOne(discovery).flush(
+      {message: "boom"},
+      {status: 500, statusText: "Server Error"},
+    );
+
+    // A second resolve must issue a fresh discovery request, not replay the error.
+    let href: string | undefined;
+    service.resolve("projects").subscribe(h => (href = h));
+    httpMock
+      .expectOne(discovery)
+      .flush({_links: {projects: {href: "http://localhost:8000/api/v1/projects"}}});
+
+    expect(href).toBe("http://localhost:8000/api/v1/projects");
+  });
 });

@@ -1,17 +1,42 @@
 import {TestBed} from "@angular/core/testing";
 import {HttpClientTestingModule, HttpTestingController} from "@angular/common/http/testing";
+import {Observable, of} from "rxjs";
 
 import {ProjectServices} from "./project.services";
+import {HateoasService} from "./hateoas.service";
+
+const base = "http://localhost:8000/api/v1";
+
+// Service discovery is exercised in hateoas.service.spec.ts; here we stub it so
+// these tests stay focused on how ProjectServices builds requests from links.
+const LINKS: Record<string, string> = {
+  connectorProjects: `${base}/connector/projects`,
+  connectorUpdate: `${base}/connector/updateProject`,
+  projectStat: `${base}/projects/{id}`,
+};
+
+class FakeHateoas {
+  resolve(rel: string): Observable<string> {
+    return of(LINKS[rel]);
+  }
+
+  resolveTemplate(rel: string, params: Record<string, string | number>): Observable<string> {
+    let url = LINKS[rel];
+    for (const [key, value] of Object.entries(params)) {
+      url = url.replace(`{${key}}`, encodeURIComponent(String(value)));
+    }
+    return of(url);
+  }
+}
 
 describe("ProjectServices", () => {
   let service: ProjectServices;
   let httpMock: HttpTestingController;
-  const base = "http://localhost:8000/api/v1";
 
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
-      providers: [ProjectServices],
+      providers: [ProjectServices, {provide: HateoasService, useClass: FakeHateoas}],
     });
     service = TestBed.inject(ProjectServices);
     httpMock = TestBed.inject(HttpTestingController);

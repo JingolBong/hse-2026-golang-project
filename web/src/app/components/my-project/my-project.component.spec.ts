@@ -5,6 +5,7 @@ import {Router} from "@angular/router";
 
 import {MyProjectComponent} from "./my-project.component";
 import {DatabaseProjectServices} from "../../services/database-project.services";
+import {provideFakeHateoas} from "../../services/hateoas.testing";
 
 describe("MyProjectComponent", () => {
   let component: MyProjectComponent;
@@ -17,7 +18,7 @@ describe("MyProjectComponent", () => {
     await TestBed.configureTestingModule({
       declarations: [MyProjectComponent],
       imports: [HttpClientTestingModule, RouterTestingModule],
-      providers: [DatabaseProjectServices],
+      providers: [DatabaseProjectServices, provideFakeHateoas],
     })
       .overrideComponent(MyProjectComponent, {set: {template: ""}})
       .compileComponents();

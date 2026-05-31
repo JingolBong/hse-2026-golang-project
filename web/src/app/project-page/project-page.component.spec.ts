@@ -3,6 +3,7 @@ import {HttpClientTestingModule, HttpTestingController} from "@angular/common/ht
 
 import {ProjectPageComponent} from "./project-page.component";
 import {ProjectServices} from "../services/project.services";
+import {provideFakeHateoas} from "../services/hateoas.testing";
 
 describe("ProjectPageComponent", () => {
   let component: ProjectPageComponent;
@@ -14,7 +15,7 @@ describe("ProjectPageComponent", () => {
     await TestBed.configureTestingModule({
       declarations: [ProjectPageComponent],
       imports: [HttpClientTestingModule],
-      providers: [ProjectServices],
+      providers: [ProjectServices, provideFakeHateoas],
     })
       .overrideComponent(ProjectPageComponent, {set: {template: ""}})
       .compileComponents();

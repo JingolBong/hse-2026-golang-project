@@ -3,6 +3,7 @@ import {HttpClientTestingModule} from "@angular/common/http/testing";
 
 import {ProjectWithCheckboxComponent} from "./checkbox-with-project.component";
 import {ProjectServices} from "../../services/project.services";
+import {provideFakeHateoas} from "../../services/hateoas.testing";
 import {CheckedProject} from "../../models/check-element.model";
 
 describe("ProjectWithCheckboxComponent", () => {
@@ -13,7 +14,7 @@ describe("ProjectWithCheckboxComponent", () => {
     await TestBed.configureTestingModule({
       declarations: [ProjectWithCheckboxComponent],
       imports: [HttpClientTestingModule],
-      providers: [ProjectServices],
+      providers: [ProjectServices, provideFakeHateoas],
     })
       .overrideComponent(ProjectWithCheckboxComponent, {set: {template: ""}})
       .compileComponents();
