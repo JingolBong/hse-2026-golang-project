@@ -100,6 +100,8 @@ func (s *Storage) UpsertIssuesBatch(
 		return nil
 	}
 
+	s.log.WithField("rows", len(issues)).Debug("batch upserting issues to master")
+
 	var (
 		args   []interface{}
 		values []string
@@ -181,6 +183,8 @@ func (s *Storage) InsertStatusChangesBatch(
 	if len(changes) == 0 {
 		return nil
 	}
+
+	s.log.WithField("rows", len(changes)).Debug("batch inserting status changes to master")
 
 	var (
 		args   []interface{}

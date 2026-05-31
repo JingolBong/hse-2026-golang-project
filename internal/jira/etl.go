@@ -33,7 +33,7 @@ func LoadProject(
 	projectKey string,
 	projectID int64,
 	cfg config.ProgramSettings,
-	log *logrus.Logger,
+	log logrus.FieldLogger,
 ) error {
 	firstPage, err := client.FetchIssuesPage(ctx, projectKey, 0, 1)
 	if err != nil {
@@ -50,6 +50,14 @@ func LoadProject(
 	pageSize := cfg.IssueInOneRequest
 	totalPages := (total + pageSize - 1) / pageSize
 	threadCount := cfg.ThreadCount
+
+	log.WithFields(logrus.Fields{
+		"project":      projectKey,
+		"total":        total,
+		"page_size":    pageSize,
+		"total_pages":  totalPages,
+		"thread_count": threadCount,
+	}).Debug("ETL fan-out planned")
 
 	tasks := make(chan pageTask, totalPages)
 	results := make(chan pageResult, totalPages)
@@ -81,6 +89,14 @@ func LoadProject(
 					if err != nil {
 						return fmt.Errorf("transform issue %s failed: %w", ji.Key, err)
 					}
+
+					log.WithFields(logrus.Fields{
+						"worker":  workerID,
+						"issue":   issue.Key,
+						"jira_id": issue.JiraID,
+						"status":  issue.Status,
+						"changes": len(changes),
+					}).Trace("issue mapped")
 
 					if ji.Fields.Creator != nil {
 						a := transformUser(*ji.Fields.Creator)
@@ -123,6 +139,13 @@ func LoadProject(
 
 	log.WithFields(logrus.Fields{"project": projectKey, "issues": len(allIssues)}).Info("Fetch done, writing to DB")
 
+	log.WithFields(logrus.Fields{
+		"project": projectKey,
+		"authors": len(allAuthors),
+		"issues":  len(allIssues),
+		"changes": len(allChanges),
+	}).Debug("mapping done, persisting to DB")
+
 	for _, author := range allAuthors {
 		if _, err := storage.UpsertAuthor(ctx, author); err != nil {
 			return fmt.Errorf("upsert author failed: %w", err)
@@ -135,6 +158,7 @@ func LoadProject(
 		if end > len(allIssues) {
 			end = len(allIssues)
 		}
+		log.WithFields(logrus.Fields{"from": i, "to": end, "batch": end - i}).Debug("upserting issues batch")
 		if err := storage.UpsertIssuesBatch(ctx, allIssues[i:end]); err != nil {
 			return fmt.Errorf("upsert issues batch failed: %w", err)
 		}
@@ -146,6 +170,7 @@ func LoadProject(
 		if end > len(allChanges) {
 			end = len(allChanges)
 		}
+		log.WithFields(logrus.Fields{"from": i, "to": end, "batch": end - i}).Debug("inserting status changes batch")
 		if err := storage.InsertStatusChangesBatch(ctx, allChanges[i:end]); err != nil {
 			return fmt.Errorf("insert status changes batch failed: %w", err)
 		}

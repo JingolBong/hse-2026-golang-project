@@ -13,6 +13,12 @@ type Config struct {
 	Jira   JiraConfig   `mapstructure:"jira"`
 	Kafka  KafkaConfig  `mapstructure:"kafka"`
 	Server ServerConfig `mapstructure:"server"`
+	Log    LogConfig    `mapstructure:"log"`
+}
+
+type LogConfig struct {
+	Level  string `mapstructure:"level"`  // info | debug | trace
+	ToFile bool   `mapstructure:"toFile"` // also write to logs/ files (local runs)
 }
 
 type KafkaConfig struct {
@@ -55,6 +61,11 @@ func LoadConfig(path string) (*Config, error) {
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
+
+	viper.SetDefault("log.level", "info")
+	viper.SetDefault("log.toFile", false)
+	_ = viper.BindEnv("log.level", "LOG_LEVEL")
+	_ = viper.BindEnv("log.toFile", "LOG_TO_FILE")
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Printf("Warning: Error reading config file: %v", err)

@@ -51,7 +51,7 @@ func TestPublishProjectUpdated_Integration(t *testing.T) {
 	defer producer.Close()
 
 	s := NewGRPCServer(nil, nil, config.ProgramSettings{}, discardLogger(), producer, topic)
-	require.NoError(t, s.publishProjectUpdated("ABC"))
+	require.NoError(t, s.publishProjectUpdated(discardLogger(), "ABC"))
 
 	// Consume it back and verify the event contract.
 	consumer, err := sarama.NewConsumer(brokers, cfg)

@@ -7,9 +7,22 @@ import (
 	"hse-2026-golang-project/internal/models"
 
 	pb "hse-2026-golang-project/internal/proto/connector"
+	"hse-2026-golang-project/jira-backend/internal/reqid"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/metadata"
 )
+
+func withRequestID(ctx context.Context) context.Context {
+	if id := reqid.FromContext(ctx); id != "" {
+		return metadata.AppendToOutgoingContext(ctx, reqid.MetadataKey, id)
+	}
+	return ctx
+}
+
+func (s *ProjectService) reqLog(ctx context.Context) *logrus.Entry {
+	return s.log.WithField("request_id", reqid.FromContext(ctx))
+}
 
 type projectRepo interface {
 	GetAll(ctx context.Context) ([]models.Project, error)
@@ -51,7 +64,13 @@ type CatalogResult struct {
 }
 
 func (s *ProjectService) GetCatalog(ctx context.Context, page, limit int, search string) (*CatalogResult, error) {
-	resp, err := s.grpcClient.GetProjects(ctx, &pb.GetProjectsRequest{
+	s.reqLog(ctx).WithFields(logrus.Fields{
+		"page":   page,
+		"limit":  limit,
+		"search": search,
+	}).Debug("fetching project catalog via connector")
+
+	resp, err := s.grpcClient.GetProjects(withRequestID(ctx), &pb.GetProjectsRequest{
 		Limit:  int32(limit),
 		Page:   int32(page),
 		Search: search,
@@ -92,9 +111,11 @@ func (s *ProjectService) GetCatalog(ctx context.Context, page, limit int, search
 }
 
 func (s *ProjectService) Delete(ctx context.Context, id int64) error {
+	s.reqLog(ctx).WithField("project_id", id).Debug("deleting project via connector")
+
 	req := &pb.DeleteProjectRequest{ProjectId: id}
 
-	_, err := s.grpcClient.DeleteProject(ctx, req)
+	_, err := s.grpcClient.DeleteProject(withRequestID(ctx), req)
 	if err != nil {
 		return fmt.Errorf("Error deleting a project via the connector: %w", err)
 	}
@@ -103,9 +124,11 @@ func (s *ProjectService) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *ProjectService) Update(ctx context.Context, key string) error {
+	s.reqLog(ctx).WithField("project", key).Debug("updating project via connector")
+
 	req := &pb.UpdateProjectRequest{ProjectKey: key}
 
-	_, err := s.grpcClient.UpdateProject(ctx, req)
+	_, err := s.grpcClient.UpdateProject(withRequestID(ctx), req)
 	if err != nil {
 		return fmt.Errorf("update project via connector: %w", err)
 	}

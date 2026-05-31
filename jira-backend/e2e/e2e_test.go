@@ -174,7 +174,7 @@ func startBackend(t *testing.T, storage *db.Storage, grpcClient pb.ConnectorServ
 	issueH := handler.NewIssueHandler(service.NewIssueService(repo))
 	graphH := handler.NewGraphHandler(service.NewGraphService(repo))
 
-	router := app.NewRouter(projectH, issueH, graphH, "*")
+	router := app.NewRouter(projectH, issueH, graphH, "*", log)
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)
 	return srv
