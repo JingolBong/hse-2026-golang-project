@@ -173,8 +173,9 @@ func startBackend(t *testing.T, storage *db.Storage, grpcClient pb.ConnectorServ
 	projectH := handler.NewProjectHandler(service.NewProjectService(repo, grpcClient, log), log)
 	issueH := handler.NewIssueHandler(service.NewIssueService(repo))
 	graphH := handler.NewGraphHandler(service.NewGraphService(repo))
+	systemH := handler.NewSystemHandler()
 
-	router := app.NewRouter(projectH, issueH, graphH, "*", log)
+	router := app.NewRouter(projectH, issueH, graphH, systemH, "*", log)
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)
 	return srv
@@ -217,13 +218,13 @@ func TestE2E_UpdateReadDeleteFlow(t *testing.T) {
 	client := backend.Client()
 
 	// 1. Trigger ETL: REST -> gRPC UpdateProject -> stub Jira -> Postgres.
-	resp, err := client.Post(backend.URL+"/api/v1/projects/PRJ/update", "application/json", nil)
+	resp, err := client.Post(backend.URL+"/api/v1/connector/updateProject?project=PRJ", "application/json", nil)
 	require.NoError(t, err)
 	resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode, "update should succeed")
 
 	// 2. The project is now persisted and visible via REST.
-	env := getJSON(t, client, backend.URL+"/api/v1/myprojects")
+	env := getJSON(t, client, backend.URL+"/api/v1/projects")
 	var projects []projectView
 	require.NoError(t, json.Unmarshal(env.Data, &projects))
 	require.Len(t, projects, 1)
@@ -232,7 +233,7 @@ func TestE2E_UpdateReadDeleteFlow(t *testing.T) {
 	require.NotZero(t, projectID)
 
 	// 3. Stats reflect the single loaded issue.
-	statEnv := getJSON(t, client, backend.URL+"/api/v1/myprojects/"+itoa(projectID)+"/stat")
+	statEnv := getJSON(t, client, backend.URL+"/api/v1/projects/"+itoa(projectID))
 	var stat struct {
 		AllIssuesCount  int `json:"allIssuesCount"`
 		OpenIssuesCount int `json:"openIssuesCount"`
@@ -242,13 +243,13 @@ func TestE2E_UpdateReadDeleteFlow(t *testing.T) {
 	assert.Equal(t, 1, stat.OpenIssuesCount)
 
 	// 4. Issues endpoint returns the loaded issue.
-	issuesEnv := getJSON(t, client, backend.URL+"/api/v1/projects/PRJ/issues")
+	issuesEnv := getJSON(t, client, backend.URL+"/api/v1/issues?project=PRJ")
 	var issues []map[string]interface{}
 	require.NoError(t, json.Unmarshal(issuesEnv.Data, &issues))
 	require.Len(t, issues, 1)
 
 	// 5. Catalog (gRPC GetProjects from stub Jira) marks PRJ as already saved.
-	catEnv := getJSON(t, client, backend.URL+"/api/v1/projects?page=1&limit=10")
+	catEnv := getJSON(t, client, backend.URL+"/api/v1/connector/projects?page=1&limit=10")
 	var catalog []projectView
 	require.NoError(t, json.Unmarshal(catEnv.Data, &catalog))
 	require.Len(t, catalog, 1)
@@ -262,7 +263,7 @@ func TestE2E_UpdateReadDeleteFlow(t *testing.T) {
 	require.Equal(t, http.StatusOK, delResp.StatusCode)
 
 	// 7. Project is gone.
-	afterEnv := getJSON(t, client, backend.URL+"/api/v1/myprojects")
+	afterEnv := getJSON(t, client, backend.URL+"/api/v1/projects")
 	var after []projectView
 	require.NoError(t, json.Unmarshal(afterEnv.Data, &after))
 	assert.Empty(t, after)
