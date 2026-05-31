@@ -1,0 +1,9 @@
+# Keep build contexts small and reproducible across all images.
+**/node_modules
+web/dist
+web/.angular
+**/*.log
+.git
+.github
+.idea
+.vscode
