@@ -1,21 +1,16 @@
 import {Injectable} from "@angular/core";
 import {HttpClient} from "@angular/common/http";
 import {Observable} from "rxjs";
+import {switchMap} from "rxjs/operators";
 import {IRequest} from "../models/request.model";
 import {IRequestObject} from "../models/requestObj.model";
-import {ConfigurationService} from "./configuration.services";
+import {HateoasService} from "./hateoas.service";
 
 @Injectable({
   providedIn: "root",
 })
 export class ProjectServices {
-  private readonly apiBase: string;
-
-  constructor(private http: HttpClient, configurationService: ConfigurationService) {
-    const host = configurationService.getValue<string>("host", "localhost");
-    const port = configurationService.getValue<number>("port", 8000);
-    this.apiBase = `http://${host}:${port}/api/v1`;
-  }
+  constructor(private http: HttpClient, private hateoas: HateoasService) {}
 
   getAll(page: number, searchName: String): Observable<IRequest> {
     const params = new URLSearchParams({
@@ -23,18 +18,21 @@ export class ProjectServices {
       limit: "10",
       search: String(searchName ?? ""),
     });
-    return this.http.get<IRequest>(`${this.apiBase}/connector/projects?${params.toString()}`);
+    return this.hateoas
+      .resolve("connectorProjects")
+      .pipe(switchMap(href => this.http.get<IRequest>(`${href}?${params.toString()}`)));
   }
 
   addProject(key: String): Observable<IRequestObject> {
     const params = new URLSearchParams({project: String(key)});
-    return this.http.post<IRequestObject>(
-      `${this.apiBase}/connector/updateProject?${params.toString()}`,
-      {},
-    );
+    return this.hateoas
+      .resolve("connectorUpdate")
+      .pipe(switchMap(href => this.http.post<IRequestObject>(`${href}?${params.toString()}`, {})));
   }
 
   deleteProject(id: Number): Observable<IRequestObject> {
-    return this.http.delete<IRequestObject>(`${this.apiBase}/projects/${id}`);
+    return this.hateoas
+      .resolveTemplate("projectStat", {id: String(id)})
+      .pipe(switchMap(href => this.http.delete<IRequestObject>(href)));
   }
 }
