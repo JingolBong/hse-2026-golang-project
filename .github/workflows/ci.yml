@@ -68,7 +68,7 @@ jobs:
         run: go test -tags=integration -count=1 -timeout 900s ./...
 
   frontend-test:
-    name: Frontend Unit Tests
+    name: Frontend Unit Tests & Build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -87,6 +87,12 @@ jobs:
 
       - name: Run unit tests (headless Chrome)
         run: npm run test:ci
+
+      - name: Production build
+        run: npm run build
+
+      - name: Compile e2e specs (no stack run)
+        run: npx playwright test --list
 
   docker-build:
     name: Docker Build

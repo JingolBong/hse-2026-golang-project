@@ -34,6 +34,12 @@ web/*.tgz
 web/.env
 web/.env.*
 
+# Playwright (e2e)
+web/test-results/
+web/playwright-report/
+web/blob-report/
+web/playwright/.cache/
+
 # Logs
 *.log
 npm-debug.log*
