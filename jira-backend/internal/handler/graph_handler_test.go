@@ -28,8 +28,40 @@ func TestGraphHandler_Make(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
+	t.Run("empty project -> 422", func(t *testing.T) {
+		svc := &fakeGraphService{}
+		svc.On("IsEmpty", mock.Anything, "ABC").Return(true, nil)
+
+		h := NewGraphHandler(svc)
+		rr := httptest.NewRecorder()
+		h.Make(rr, requestWithVars(http.MethodPost, "/", map[string]string{"project": "ABC", "task": "1"}))
+		assert.Equal(t, http.StatusUnprocessableEntity, rr.Code)
+		svc.AssertExpectations(t)
+	})
+
+	t.Run("IsEmpty project not found -> 404", func(t *testing.T) {
+		svc := &fakeGraphService{}
+		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, service.ErrProjectNotFound)
+
+		h := NewGraphHandler(svc)
+		rr := httptest.NewRecorder()
+		h.Make(rr, requestWithVars(http.MethodPost, "/", map[string]string{"project": "ABC", "task": "1"}))
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("IsEmpty error -> 500", func(t *testing.T) {
+		svc := &fakeGraphService{}
+		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, errors.New("boom"))
+
+		h := NewGraphHandler(svc)
+		rr := httptest.NewRecorder()
+		h.Make(rr, requestWithVars(http.MethodPost, "/", map[string]string{"project": "ABC", "task": "1"}))
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
+
 	t.Run("project not found -> 404", func(t *testing.T) {
 		svc := &fakeGraphService{}
+		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, nil)
 		svc.On("Make", mock.Anything, "ABC", 1).Return(service.ErrProjectNotFound)
 
 		h := NewGraphHandler(svc)
@@ -40,6 +72,7 @@ func TestGraphHandler_Make(t *testing.T) {
 
 	t.Run("unsupported task -> 400", func(t *testing.T) {
 		svc := &fakeGraphService{}
+		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, nil)
 		svc.On("Make", mock.Anything, "ABC", 9).Return(service.ErrUnsupportedTask)
 
 		h := NewGraphHandler(svc)
@@ -50,6 +83,7 @@ func TestGraphHandler_Make(t *testing.T) {
 
 	t.Run("internal error -> 500", func(t *testing.T) {
 		svc := &fakeGraphService{}
+		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, nil)
 		svc.On("Make", mock.Anything, "ABC", 1).Return(errors.New("boom"))
 
 		h := NewGraphHandler(svc)
@@ -60,6 +94,7 @@ func TestGraphHandler_Make(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		svc := &fakeGraphService{}
+		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, nil)
 		svc.On("Make", mock.Anything, "ABC", 1).Return(nil)
 
 		h := NewGraphHandler(svc)
@@ -132,14 +167,14 @@ func TestGraphHandler_Compare(t *testing.T) {
 	t.Run("invalid task -> 400", func(t *testing.T) {
 		h := NewGraphHandler(&fakeGraphService{})
 		rr := httptest.NewRecorder()
-		h.Compare(rr, httptest.NewRequest(http.MethodGet, "/api/v1/graph/compare?projects=A", nil))
+		h.Compare(rr, requestWithVars(http.MethodGet, "/api/v1/compare?project=A", map[string]string{"task": "xx"}))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("no projects -> 400", func(t *testing.T) {
 		h := NewGraphHandler(&fakeGraphService{})
 		rr := httptest.NewRecorder()
-		h.Compare(rr, httptest.NewRequest(http.MethodGet, "/api/v1/graph/compare?task=1", nil))
+		h.Compare(rr, requestWithVars(http.MethodGet, "/api/v1/compare", map[string]string{"task": "1"}))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
@@ -149,8 +184,9 @@ func TestGraphHandler_Compare(t *testing.T) {
 
 		h := NewGraphHandler(svc)
 		rr := httptest.NewRecorder()
-		h.Compare(rr, httptest.NewRequest(http.MethodGet, "/api/v1/graph/compare?task=2&projects=A&projects=B", nil))
+		h.Compare(rr, requestWithVars(http.MethodGet, "/api/v1/compare?project=A,B", map[string]string{"task": "2"}))
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		svc.AssertExpectations(t)
 	})
 
 	t.Run("internal error -> 500", func(t *testing.T) {
@@ -159,7 +195,7 @@ func TestGraphHandler_Compare(t *testing.T) {
 
 		h := NewGraphHandler(svc)
 		rr := httptest.NewRecorder()
-		h.Compare(rr, httptest.NewRequest(http.MethodGet, "/api/v1/graph/compare?task=1&projects=A", nil))
+		h.Compare(rr, requestWithVars(http.MethodGet, "/api/v1/compare?project=A", map[string]string{"task": "1"}))
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	})
 
@@ -169,7 +205,7 @@ func TestGraphHandler_Compare(t *testing.T) {
 
 		h := NewGraphHandler(svc)
 		rr := httptest.NewRecorder()
-		h.Compare(rr, httptest.NewRequest(http.MethodGet, "/api/v1/graph/compare?task=1&projects=A&projects=B", nil))
+		h.Compare(rr, requestWithVars(http.MethodGet, "/api/v1/compare?project=A,B", map[string]string{"task": "1"}))
 		require.Equal(t, http.StatusOK, rr.Code)
 		svc.AssertExpectations(t)
 	})
@@ -196,51 +232,6 @@ func TestGraphHandler_IsAnalyzed(t *testing.T) {
 		data, ok := env.Data.(map[string]interface{})
 		require.True(t, ok)
 		assert.Equal(t, true, data["isAnalyzed"])
-		svc.AssertExpectations(t)
-	})
-}
-
-func TestGraphHandler_IsEmpty(t *testing.T) {
-	t.Run("missing project -> 400", func(t *testing.T) {
-		h := NewGraphHandler(&fakeGraphService{})
-		rr := httptest.NewRecorder()
-		h.IsEmpty(rr, httptest.NewRequest(http.MethodGet, "/api/v1/isEmpty", nil))
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-
-	t.Run("not found -> 404", func(t *testing.T) {
-		svc := &fakeGraphService{}
-		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, service.ErrProjectNotFound)
-
-		h := NewGraphHandler(svc)
-		rr := httptest.NewRecorder()
-		h.IsEmpty(rr, httptest.NewRequest(http.MethodGet, "/api/v1/isEmpty?project=ABC", nil))
-		assert.Equal(t, http.StatusNotFound, rr.Code)
-	})
-
-	t.Run("internal error -> 500", func(t *testing.T) {
-		svc := &fakeGraphService{}
-		svc.On("IsEmpty", mock.Anything, "ABC").Return(false, errors.New("boom"))
-
-		h := NewGraphHandler(svc)
-		rr := httptest.NewRecorder()
-		h.IsEmpty(rr, httptest.NewRequest(http.MethodGet, "/api/v1/isEmpty?project=ABC", nil))
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		svc := &fakeGraphService{}
-		svc.On("IsEmpty", mock.Anything, "ABC").Return(true, nil)
-
-		h := NewGraphHandler(svc)
-		rr := httptest.NewRecorder()
-		h.IsEmpty(rr, httptest.NewRequest(http.MethodGet, "/api/v1/isEmpty?project=ABC", nil))
-
-		require.Equal(t, http.StatusOK, rr.Code)
-		env := decodeEnvelope(t, rr)
-		data, ok := env.Data.(map[string]interface{})
-		require.True(t, ok)
-		assert.Equal(t, true, data["isEmpty"])
 		svc.AssertExpectations(t)
 	})
 }
