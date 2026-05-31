@@ -28,3 +28,7 @@ kafka:
 
 server:
   port: 8001
+
+log:
+  level: "info"   # info | debug | trace
+  toFile: false   # write to logs/ files in addition to stdout/stderr (local runs)

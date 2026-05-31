@@ -16,17 +16,22 @@ import (
 	"hse-2026-golang-project/internal/config"
 	"hse-2026-golang-project/internal/db"
 	connector "hse-2026-golang-project/internal/jira"
+	applog "hse-2026-golang-project/internal/logger"
 	pb "hse-2026-golang-project/internal/proto/connector"
 )
 
 func main() {
-	logger := connector.NewLogger()
-	logger.Println("Starting Jira Connector Service...")
-
 	cfg, err := config.LoadConfig("configs")
 	if err != nil {
-		logger.Fatalf("Failed to load configuration: %v", err)
+		applog.New(applog.Options{Service: "connector"}).Fatalf("Failed to load configuration: %v", err)
 	}
+
+	logger := applog.New(applog.Options{
+		Level:   cfg.Log.Level,
+		Service: "connector",
+		ToFile:  cfg.Log.ToFile,
+	})
+	logger.Println("Starting Jira Connector Service...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -57,6 +62,7 @@ func main() {
 	defer producer.Close()
 
 	storage := db.NewStorage(writeDB, readDB)
+	storage.SetLogger(logger)
 	jiraClient := connector.NewJiraClient(cfg.Jira.Program, logger)
 
 	port := fmt.Sprintf(":%d", cfg.Jira.Program.Port)

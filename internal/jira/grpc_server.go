@@ -10,6 +10,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"hse-2026-golang-project/internal/config"
@@ -17,6 +18,8 @@ import (
 	"hse-2026-golang-project/internal/models"
 	pb "hse-2026-golang-project/internal/proto/connector"
 )
+
+const requestIDMetadataKey = "x-request-id"
 
 type GRPCServer struct {
 	pb.UnimplementedConnectorServiceServer
@@ -39,6 +42,16 @@ func NewGRPCServer(storage *db.Storage, client *JiraClient, cfg config.ProgramSe
 	}
 }
 
+func (s *GRPCServer) reqLog(ctx context.Context) *logrus.Entry {
+	id := ""
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if v := md.Get(requestIDMetadataKey); len(v) > 0 {
+			id = v[0]
+		}
+	}
+	return s.log.WithField("request_id", id)
+}
+
 func (s *GRPCServer) Health(ctx context.Context, req *pb.HealthRequest) (*pb.HealthResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -59,6 +72,13 @@ func (s *GRPCServer) Health(ctx context.Context, req *pb.HealthRequest) (*pb.Hea
 func (s *GRPCServer) GetProjects(ctx context.Context, req *pb.GetProjectsRequest) (*pb.GetProjectsResponse, error) {
 	limit := int(req.Limit)
 	page := int(req.Page)
+
+	s.reqLog(ctx).WithFields(logrus.Fields{
+		"rpc":    "GetProjects",
+		"page":   page,
+		"limit":  limit,
+		"search": req.Search,
+	}).Debug("RPC received")
 
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -122,7 +142,12 @@ func (s *GRPCServer) UpdateProject(ctx context.Context, req *pb.UpdateProjectReq
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 
-	s.log.WithField("project", req.ProjectKey).Info("UpdateProject started")
+	log := s.reqLog(ctx)
+	log.WithFields(logrus.Fields{
+		"rpc":     "UpdateProject",
+		"project": req.ProjectKey,
+	}).Debug("RPC received")
+	log.WithField("project", req.ProjectKey).Info("UpdateProject started")
 
 	projects, err := s.client.GetProjects(ctx)
 	if err != nil {
@@ -143,30 +168,31 @@ func (s *GRPCServer) UpdateProject(ctx context.Context, req *pb.UpdateProjectReq
 
 	projectID := hashUsername(jiraProject.ID)
 
+	log.WithFields(logrus.Fields{"project": jiraProject.Key, "project_id": projectID}).Debug("upserting project")
 	if _, err := s.storage.UpsertProject(ctx, models.Project{
 		JiraID: projectID,
 		Key:    jiraProject.Key,
 		Name:   jiraProject.Name,
 		URL:    jiraProject.Self,
 	}); err != nil {
-		s.log.WithError(err).Error("failed to upsert project")
+		log.WithError(err).Error("failed to upsert project")
 		return nil, status.Errorf(codes.Internal, "db error: %v", err)
 	}
 
-	if err := LoadProject(ctx, s.storage, s.client, req.ProjectKey, projectID, s.cfg, s.log); err != nil {
-		s.log.WithError(err).Error("LoadProject failed")
+	if err := LoadProject(ctx, s.storage, s.client, req.ProjectKey, projectID, s.cfg, log); err != nil {
+		log.WithError(err).Error("LoadProject failed")
 		return nil, status.Errorf(codes.Internal, "load failed: %v", err)
 	}
 
-	s.log.Info("Sending notification to Kafka...")
+	log.Info("Sending notification to Kafka...")
 
-	if err := s.publishProjectUpdated(req.ProjectKey); err != nil {
-		s.log.WithError(err).Warn("Failed to send message to Kafka, but ETL succeeded")
+	if err := s.publishProjectUpdated(log, req.ProjectKey); err != nil {
+		log.WithError(err).Warn("Failed to send message to Kafka, but ETL succeeded")
 	} else {
-		s.log.Info("Successfully pushed ETL result to Kafka!")
+		log.Info("Successfully pushed ETL result to Kafka!")
 	}
 
-	s.log.WithField("project", req.ProjectKey).Info("UpdateProject completed")
+	log.WithField("project", req.ProjectKey).Info("UpdateProject completed")
 
 	return &pb.UpdateProjectResponse{
 		Status:  "ok",
@@ -174,7 +200,7 @@ func (s *GRPCServer) UpdateProject(ctx context.Context, req *pb.UpdateProjectReq
 	}, nil
 }
 
-func (s *GRPCServer) publishProjectUpdated(projectKey string) error {
+func (s *GRPCServer) publishProjectUpdated(log logrus.FieldLogger, projectKey string) error {
 	kafkaMessage := map[string]interface{}{
 		"event":     "project_updated",
 		"project":   projectKey,
@@ -187,17 +213,37 @@ func (s *GRPCServer) publishProjectUpdated(projectKey string) error {
 		return err
 	}
 
-	_, _, err = s.producer.SendMessage(&sarama.ProducerMessage{
+	log.WithFields(logrus.Fields{
+		"topic":   s.kafkaTopic,
+		"payload": string(msgBytes),
+	}).Debug("publishing message to Kafka")
+
+	partition, offset, err := s.producer.SendMessage(&sarama.ProducerMessage{
 		Topic: s.kafkaTopic,
 		Value: sarama.ByteEncoder(msgBytes),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	log.WithFields(logrus.Fields{
+		"topic":     s.kafkaTopic,
+		"partition": partition,
+		"offset":    offset,
+	}).Debug("message published to Kafka")
+	return nil
 }
 
 func (s *GRPCServer) DeleteProject(ctx context.Context, req *pb.DeleteProjectRequest) (*pb.DeleteProjectResponse, error) {
 	if req.ProjectId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "invalid project_id")
 	}
+
+	log := s.reqLog(ctx)
+	log.WithFields(logrus.Fields{
+		"rpc":        "DeleteProject",
+		"project_id": req.ProjectId,
+	}).Debug("RPC received")
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -206,7 +252,7 @@ func (s *GRPCServer) DeleteProject(ctx context.Context, req *pb.DeleteProjectReq
 		if errors.Is(err, db.ErrNotFound) {
 			return nil, status.Errorf(codes.NotFound, "project %d not found", req.ProjectId)
 		}
-		s.log.WithError(err).Error("delete project failed")
+		log.WithError(err).Error("delete project failed")
 		return nil, status.Errorf(codes.Internal, "db error: %v", err)
 	}
 

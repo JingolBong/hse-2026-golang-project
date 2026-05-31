@@ -4,12 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
+
+var nopLogger = func() *logrus.Logger {
+	l := logrus.New()
+	l.SetOutput(io.Discard)
+	return l
+}()
 
 type Storage struct {
 	writeDB *sql.DB
 	readDB  *sql.DB
+	log     *logrus.Logger
 }
 
 const (
@@ -25,7 +35,13 @@ type DBHealth struct {
 }
 
 func NewStorage(writeDB, readDB *sql.DB) *Storage {
-	return &Storage{writeDB: writeDB, readDB: readDB}
+	return &Storage{writeDB: writeDB, readDB: readDB, log: nopLogger}
+}
+
+func (s *Storage) SetLogger(l *logrus.Logger) {
+	if l != nil {
+		s.log = l
+	}
 }
 
 func (s *Storage) Close() error {
@@ -98,11 +114,13 @@ func (s *Storage) readWithFallback(
 	fn func(db *sql.DB) error,
 ) error {
 
+	s.log.Debug("read query routed to replica")
 	err := s.retryRead(ctx, fn)
 	if err == nil {
 		return nil
 	}
 
+	s.log.WithError(err).Debug("replica read failed, falling back to master")
 	return fn(s.writeDB)
 }
 

@@ -10,10 +10,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	connector "hse-2026-golang-project/internal/jira"
 	pb "hse-2026-golang-project/internal/proto/connector"
 
+	"hse-2026-golang-project/internal/config"
 	"hse-2026-golang-project/internal/db"
+	applog "hse-2026-golang-project/internal/logger"
 	"hse-2026-golang-project/jira-backend/internal/app"
 	"hse-2026-golang-project/jira-backend/internal/handler"
 	"hse-2026-golang-project/jira-backend/internal/repository"
@@ -21,7 +22,16 @@ import (
 )
 
 func main() {
-	logger := connector.NewLogger()
+	cfg, err := config.LoadConfig("configs")
+	if err != nil {
+		applog.New(applog.Options{Service: "backend"}).Fatalf("load config: %v", err)
+	}
+
+	logger := applog.New(applog.Options{
+		Level:   cfg.Log.Level,
+		Service: "backend",
+		ToFile:  cfg.Log.ToFile,
+	})
 
 	dsn := "postgres://pguser:pgpwd@postgres-master:5432/testdb?sslmode=disable"
 
@@ -35,15 +45,16 @@ func main() {
 	}
 
 	storage := db.NewStorage(writeDB, readDB)
+	storage.SetLogger(logger)
 	defer func() {
 		if err := storage.Close(); err != nil {
-			logger.Printf("close db connections: %v", err)
+			logger.WithError(err).Warn("close db connections")
 		}
 	}()
 
 	repo := repository.NewProjectRepository(storage)
 
-	connectorAddress := "connector:8001" 
+	connectorAddress := "connector:8001"
 	conn, err := grpc.NewClient(connectorAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Fatalf("create grpc connection: %v", err)
@@ -64,8 +75,8 @@ func main() {
 		corsOrigin = "http://localhost:4200"
 	}
 
-	router := app.NewRouter(projectHandler, issueHandler, graphHandler, corsOrigin)
+	router := app.NewRouter(projectHandler, issueHandler, graphHandler, corsOrigin, logger)
 
-	logger.Println("Server started on :8000")
+	logger.Info("Server started on :8000")
 	logger.Fatal(http.ListenAndServe(":8000", router))
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"hse-2026-golang-project/internal/db"
+	"hse-2026-golang-project/jira-backend/internal/reqid"
 	"hse-2026-golang-project/jira-backend/internal/service"
 )
 
@@ -43,6 +44,13 @@ func (h *ProjectHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 	page := queryInt(r, "page", 1)
 	limit := queryInt(r, "limit", defaultPageLimit)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
+
+	h.log.WithFields(logrus.Fields{
+		"request_id": reqid.FromContext(r.Context()),
+		"page":       page,
+		"limit":      limit,
+		"search":     search,
+	}).Debug("GetCatalog handler")
 
 	result, err := h.service.GetCatalog(r.Context(), page, limit, search)
 	if err != nil {
@@ -145,6 +153,11 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "[project key is required]")
 		return
 	}
+
+	h.log.WithFields(logrus.Fields{
+		"request_id": reqid.FromContext(r.Context()),
+		"project":    key,
+	}).Debug("Update handler")
 
 	if err := h.service.Update(r.Context(), key); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update project")

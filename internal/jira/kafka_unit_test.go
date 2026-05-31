@@ -41,7 +41,7 @@ func TestPublishProjectUpdated_SendsEvent(t *testing.T) {
 	})
 
 	s := NewGRPCServer(nil, nil, config.ProgramSettings{}, discardLogger(), prod, "events")
-	require.NoError(t, s.publishProjectUpdated("ABC"))
+	require.NoError(t, s.publishProjectUpdated(discardLogger(), "ABC"))
 	require.NoError(t, prod.Close())
 }
 
@@ -50,7 +50,7 @@ func TestPublishProjectUpdated_ProducerError(t *testing.T) {
 	prod.ExpectSendMessageAndFail(sarama.ErrBrokerNotAvailable)
 
 	s := NewGRPCServer(nil, nil, config.ProgramSettings{}, discardLogger(), prod, "events")
-	err := s.publishProjectUpdated("ABC")
+	err := s.publishProjectUpdated(discardLogger(), "ABC")
 	require.Error(t, err)
 	require.NoError(t, prod.Close())
 }

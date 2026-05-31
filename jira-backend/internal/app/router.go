@@ -4,8 +4,10 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/sirupsen/logrus"
 
 	"hse-2026-golang-project/jira-backend/internal/handler"
+	"hse-2026-golang-project/jira-backend/internal/reqid"
 )
 
 func cors(allowedOrigin string) mux.MiddlewareFunc {
@@ -13,11 +15,34 @@ func cors(allowedOrigin string) mux.MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, "+reqid.HeaderName)
 			if req.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
+			next.ServeHTTP(w, req)
+		})
+	}
+}
+
+func requestLogging(log *logrus.Logger) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			id := req.Header.Get(reqid.HeaderName)
+			if id == "" {
+				id = reqid.New()
+			}
+			ctx := reqid.WithID(req.Context(), id)
+			req = req.WithContext(ctx)
+			w.Header().Set(reqid.HeaderName, id)
+
+			log.WithFields(logrus.Fields{
+				"request_id": id,
+				"method":     req.Method,
+				"path":       req.URL.Path,
+				"query":      req.URL.RawQuery,
+			}).Debug("incoming request")
+
 			next.ServeHTTP(w, req)
 		})
 	}
@@ -28,8 +53,10 @@ func NewRouter(
 	issueHandler *handler.IssueHandler,
 	graphHandler *handler.GraphHandler,
 	allowedOrigin string,
+	log *logrus.Logger,
 ) *mux.Router {
 	r := mux.NewRouter()
+	r.Use(requestLogging(log))
 	r.Use(cors(allowedOrigin))
 
 	r.HandleFunc("/api/v1/projects", projectHandler.GetCatalog).Methods("GET")

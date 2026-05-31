@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hse-2026-golang-project/internal/config"
+	"io"
 	"net/http"
 	"time"
 
@@ -55,6 +56,12 @@ func (c *JiraClient) doRequest(ctx context.Context, url string, target interface
 		}
 		request.Header.Set("Accept", "application/json")
 
+		c.log.WithFields(logrus.Fields{
+			"method": http.MethodGet,
+			"url":    url,
+		}).Debug("sending request to jira")
+
+		start := time.Now()
 		resp, err := c.httpClient.Do(request)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -98,9 +105,24 @@ func (c *JiraClient) doRequest(ctx context.Context, url string, target interface
 			return fmt.Errorf("unexpected status %d for %s", resp.StatusCode, url)
 		}
 
-		err = json.NewDecoder(resp.Body).Decode(target)
+		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
+			return fmt.Errorf("read response from %s: %w", url, err)
+		}
+
+		c.log.WithFields(logrus.Fields{
+			"url":         url,
+			"status_code": resp.StatusCode,
+			"duration_ms": time.Since(start).Milliseconds(),
+			"bytes":       len(body),
+		}).Debug("received response from jira")
+
+		if c.log.IsLevelEnabled(logrus.TraceLevel) {
+			c.log.WithFields(logrus.Fields{"url": url, "body": string(body)}).Trace("jira raw response body")
+		}
+
+		if err := json.Unmarshal(body, target); err != nil {
 			return fmt.Errorf("decode response from %s: %w", url, err)
 		}
 		return nil
