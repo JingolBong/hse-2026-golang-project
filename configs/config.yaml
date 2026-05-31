@@ -27,8 +27,11 @@ kafka:
   topic: "etl.jobs" 
 
 server:
-  port: 8001
+  bindAddress: "0.0.0.0"
+  port: 8000
+  resourseTimeout: 5
+  analyticsTimeout: 15
 
 log:
   level: "info"   # info | debug | trace
-  toFile: false   # write to logs/ files in addition to stdout/stderr (local runs)
+  toFile: true    # keep the required logs.log and err_logs.log files

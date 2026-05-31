@@ -3,12 +3,16 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"hse-2026-golang-project/internal/models"
+	"hse-2026-golang-project/jira-backend/internal/reqid"
+
+	"github.com/sirupsen/logrus"
 )
 
 var ErrUnsupportedTask = errors.New("unsupported graph task")
@@ -27,17 +31,33 @@ var (
 	priorityBins = []string{"Blocker", "Critical", "Major", "Minor", "Trivial"}
 )
 
+var graphNopLogger = func() *logrus.Logger {
+	log := logrus.New()
+	log.SetOutput(io.Discard)
+	return log
+}()
+
 type GraphService struct {
 	repo     graphRepo
+	log      *logrus.Logger
 	mu       sync.RWMutex
 	analyzed map[string]bool
 }
 
-func NewGraphService(repo graphRepo) *GraphService {
+func NewGraphService(repo graphRepo, logs ...*logrus.Logger) *GraphService {
+	log := graphNopLogger
+	if len(logs) > 0 && logs[0] != nil {
+		log = logs[0]
+	}
 	return &GraphService{
 		repo:     repo,
+		log:      log,
 		analyzed: make(map[string]bool),
 	}
+}
+
+func (s *GraphService) reqLog(ctx context.Context) *logrus.Entry {
+	return s.log.WithField("request_id", reqid.FromContext(ctx))
 }
 
 type histogram struct {
@@ -78,6 +98,9 @@ func resolveProject(ctx context.Context, repo graphRepo, ref string) (*models.Pr
 }
 
 func (s *GraphService) Make(ctx context.Context, projectKey string, task int) error {
+	log := s.reqLog(ctx).WithFields(logrus.Fields{"project": projectKey, "task": task})
+	log.Debug("preparing analytics task")
+
 	if !validTask(task) {
 		return ErrUnsupportedTask
 	}
@@ -94,6 +117,7 @@ func (s *GraphService) Make(ctx context.Context, projectKey string, task int) er
 	s.analyzed[projectKey] = true
 	s.mu.Unlock()
 
+	log.Info("analytics task prepared")
 	return nil
 }
 
@@ -114,6 +138,8 @@ func (s *GraphService) IsEmpty(ctx context.Context, ref string) (bool, error) {
 }
 
 func (s *GraphService) Get(ctx context.Context, projectKey string, task int) (interface{}, error) {
+	s.reqLog(ctx).WithFields(logrus.Fields{"project": projectKey, "task": task}).Info("building analytics response")
+
 	if !validTask(task) {
 		return nil, ErrUnsupportedTask
 	}
@@ -161,6 +187,8 @@ func (s *GraphService) Get(ctx context.Context, projectKey string, task int) (in
 }
 
 func (s *GraphService) Compare(ctx context.Context, keys []string, task int) (interface{}, error) {
+	s.reqLog(ctx).WithFields(logrus.Fields{"projects": keys, "task": task}).Info("building analytics comparison")
+
 	if task != 1 {
 		return nil, ErrUnsupportedTask
 	}
@@ -217,6 +245,7 @@ func (s *GraphService) IsAnalyzed(projectKey string) bool {
 }
 
 func (s *GraphService) DropAnalyzed(projectKey string) {
+	s.log.WithField("project", projectKey).Info("dropping analytics state")
 	s.mu.Lock()
 	delete(s.analyzed, projectKey)
 	s.mu.Unlock()

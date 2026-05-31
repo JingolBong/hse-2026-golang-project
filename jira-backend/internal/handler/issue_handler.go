@@ -12,30 +12,39 @@ import (
 
 type IssueHandler struct {
 	service issueService
+	links   *LinkBuilder
 }
 
-func NewIssueHandler(s issueService) *IssueHandler {
-	return &IssueHandler{service: s}
+func NewIssueHandler(s issueService, builders ...*LinkBuilder) *IssueHandler {
+	return &IssueHandler{
+		service: s,
+		links:   linkBuilderOrDefault(builders),
+	}
 }
 
 func (h *IssueHandler) GetByProject(w http.ResponseWriter, r *http.Request) {
+	links := h.links.ResourceLinks(r)
 	key := projectKeyFromRequest(r)
 	if key == "" {
-		writeError(w, http.StatusBadRequest, "project key is required")
+		writeError(w, r, http.StatusBadRequest, "project key is required", links)
 		return
 	}
 
 	data, err := h.service.GetByProjectKey(r.Context(), key)
 	if errors.Is(err, service.ErrProjectNotFound) {
-		writeError(w, http.StatusNotFound, "project not found")
+		writeError(w, r, http.StatusNotFound, "project not found", links)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load issues")
+		if isTimeoutError(err) {
+			writeRequestTimeout(w, r, links)
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "failed to load issues", links)
 		return
 	}
 
-	if err := writeData(w, http.StatusOK, data); err != nil {
+	if err := writeData(w, r, http.StatusOK, data, links); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }

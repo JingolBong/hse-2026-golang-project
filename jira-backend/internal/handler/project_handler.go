@@ -19,28 +19,36 @@ const defaultPageLimit = 10
 type ProjectHandler struct {
 	service projectService
 	log     *logrus.Logger
+	links   *LinkBuilder
 }
 
-func NewProjectHandler(s projectService, log *logrus.Logger) *ProjectHandler {
+func NewProjectHandler(s projectService, log *logrus.Logger, builders ...*LinkBuilder) *ProjectHandler {
 	return &ProjectHandler{
 		service: s,
 		log:     log,
+		links:   linkBuilderOrDefault(builders),
 	}
 }
 
 func (h *ProjectHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	links := h.links.ResourceLinks(r)
 	data, err := h.service.GetAll(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load projects")
+		if isTimeoutError(err) {
+			writeRequestTimeout(w, r, links)
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "failed to load projects", links)
 		return
 	}
 
-	if err := writeData(w, http.StatusOK, projectsFromModels(data)); err != nil {
+	if err := writeData(w, r, http.StatusOK, projectsFromModels(r, data, h.links), links); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
 
 func (h *ProjectHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
+	links := h.links.ConnectorLinks(r)
 	page := queryInt(r, "page", 1)
 	limit := queryInt(r, "limit", defaultPageLimit)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
@@ -54,7 +62,11 @@ func (h *ProjectHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.service.GetCatalog(r.Context(), page, limit, search)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load catalog")
+		if isTimeoutError(err) {
+			writeRequestTimeout(w, r, links)
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "failed to load catalog", links)
 		return
 	}
 
@@ -63,7 +75,7 @@ func (h *ProjectHandler) GetCatalog(w http.ResponseWriter, r *http.Request) {
 		PageCount:     result.PageCount,
 		ProjectsCount: result.TotalCount,
 	}
-	if err := writeDataPaged(w, http.StatusOK, projectsFromCatalog(result.Projects), pageInfo); err != nil {
+	if err := writeDataPaged(w, r, http.StatusOK, projectsFromCatalog(r, result.Projects, h.links), pageInfo, links); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
@@ -91,19 +103,24 @@ type statView struct {
 }
 
 func (h *ProjectHandler) Stat(w http.ResponseWriter, r *http.Request) {
+	links := h.links.ResourceLinks(r)
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid project id")
+		writeError(w, r, http.StatusBadRequest, "invalid project id", links)
 		return
 	}
 
 	stat, err := h.service.GetStat(r.Context(), id)
 	if errors.Is(err, service.ErrProjectNotFound) {
-		writeError(w, http.StatusNotFound, "project not found")
+		writeError(w, r, http.StatusNotFound, "project not found", links)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load project stat")
+		if isTimeoutError(err) {
+			writeRequestTimeout(w, r, links)
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "failed to load project stat", links)
 		return
 	}
 
@@ -120,37 +137,43 @@ func (h *ProjectHandler) Stat(w http.ResponseWriter, r *http.Request) {
 		AverageTime:         stat.AverageTime,
 		AverageIssuesCount:  stat.AverageIssuesCount,
 	}
-	if err := writeData(w, http.StatusOK, view); err != nil {
+	if err := writeData(w, r, http.StatusOK, view, links); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
 
 func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	links := h.links.ResourceLinks(r)
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid project id")
+		writeError(w, r, http.StatusBadRequest, "invalid project id", links)
 		return
 	}
 
 	err = h.service.Delete(r.Context(), id)
 	if errors.Is(err, db.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "project not found")
+		writeError(w, r, http.StatusNotFound, "project not found", links)
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to delete project")
+		if isTimeoutError(err) {
+			writeRequestTimeout(w, r, links)
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "failed to delete project", links)
 		return
 	}
 
-	if err := writeData(w, http.StatusOK, nil); err != nil {
+	if err := writeData(w, r, http.StatusOK, nil, links); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
 
 func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
+	links := h.links.ConnectorLinks(r)
 	key := projectKeyFromRequest(r)
 	if key == "" {
-		writeError(w, http.StatusBadRequest, "[project key is required]")
+		writeError(w, r, http.StatusBadRequest, "[project key is required]", links)
 		return
 	}
 
@@ -160,11 +183,15 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}).Debug("Update handler")
 
 	if err := h.service.Update(r.Context(), key); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update project")
+		if isTimeoutError(err) {
+			writeRequestTimeout(w, r, links)
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "failed to update project", links)
 		return
 	}
 
-	if err := writeData(w, http.StatusOK, map[string]string{"project": key}); err != nil {
+	if err := writeData(w, r, http.StatusOK, map[string]string{"project": key}, links); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }

@@ -27,7 +27,10 @@ type KafkaConfig struct {
 }
 
 type ServerConfig struct {
-	Port int `mapstructure:"port"`
+	BindAddress      string `mapstructure:"bindAddress"`
+	Port             int    `mapstructure:"port"`
+	ResourseTimeout  int    `mapstructure:"resourseTimeout"`
+	AnalyticsTimeout int    `mapstructure:"analyticsTimeout"`
 }
 
 type JiraConfig struct {
