@@ -131,6 +131,13 @@ func NewRouter(
 	r.Use(requestLogging(log))
 	r.Use(cors(allowedOrigin))
 
+	// Answer CORS preflight for any path. gorilla/mux only runs Use middleware
+	// on a matched route, so without this an OPTIONS request to a method-specific
+	// route (e.g. POST-only /connector/updateProject) returns 405 with no CORS
+	// headers and the browser blocks the real request. Matching here lets the
+	// cors middleware short-circuit OPTIONS with 204 + the proper headers.
+	r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+
 	resource := r.NewRoute().Subrouter()
 	resource.Use(withRequestTimeout(resourceTimeout))
 	resource.HandleFunc("/api/v1/projects", projectHandler.GetAll).Methods("GET")
