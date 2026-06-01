@@ -84,7 +84,7 @@ func (c *JiraClient) doRequest(ctx context.Context, url string, target interface
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if wait > c.maxSleep {
 				return fmt.Errorf("jira returned %d after all retries for %s", resp.StatusCode, url)
 			}
@@ -101,12 +101,12 @@ func (c *JiraClient) doRequest(ctx context.Context, url string, target interface
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return fmt.Errorf("unexpected status %d for %s", resp.StatusCode, url)
 		}
 
 		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			return fmt.Errorf("read response from %s: %w", url, err)
 		}

@@ -35,12 +35,12 @@ func NewDB(ctx context.Context, dbCfg DBConfig) (*sql.DB, error) {
 		log.Printf("DB (%s) not ready: %v. Retrying... (%d/5)", dbCfg.Host, pingErr, i+1)
 		select {
 		case <-ctx.Done():
-			db.Close()
+			_ = db.Close()
 			return nil, ctx.Err()
 		case <-time.After(3 * time.Second):
 		}
 	}
 
-	db.Close()
+	_ = db.Close()
 	return nil, fmt.Errorf("db connection failed after retries: %w", pingErr)
 }

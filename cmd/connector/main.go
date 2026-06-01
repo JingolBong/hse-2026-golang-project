@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Write DB connection failed: %v", err)
 	}
-	defer writeDB.Close()
+	defer func() { _ = writeDB.Close() }()
 	logger.Println("Write DB connected successfully!")
 
 	logger.Printf("Connecting to Read DB at %s:%d...", cfg.Jira.ReadDB.Host, cfg.Jira.ReadDB.Port)
@@ -49,7 +49,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Read DB connection failed: %v", err)
 	}
-	defer readDB.Close()
+	defer func() { _ = readDB.Close() }()
 	logger.Println("Read DB connected successfully!")
 
 	logger.Printf("Initializing Kafka Producer (Brokers: %v, Topic: %s)...", cfg.Kafka.Brokers, cfg.Kafka.Topic)
@@ -59,7 +59,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Failed to start Sarama producer: %v", err)
 	}
-	defer producer.Close()
+	defer func() { _ = producer.Close() }()
 
 	storage := db.NewStorage(writeDB, readDB)
 	storage.SetLogger(logger)
