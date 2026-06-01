@@ -75,6 +75,15 @@
 
     <p id ="open-task-title">Гистограмма, отражающая время, которое задачи провели в открытом состоянии</p>
     <div class="chart" id="open-task" [chart]="openTaskChart"></div>
+
+    <p id="complexity-task-title">График сложности задач</p>
+    <div class="chart" id="complexity-task" [chart]="complexityTaskChart"></div>
+
+    <p id="task-priority-title">График, отражающий приоритетность всех задач</p>
+    <div class="chart" id="task-priority" [chart]="taskPriorityChart"></div>
+
+    <p id="close-task-priority-title">График, отражающий приоритетность закрытых задач</p>
+    <div class="chart" id="close-task-priority" [chart]="closeTaskPriorityChart"></div>
   </div>
 
 </div>

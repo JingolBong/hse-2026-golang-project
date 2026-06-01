@@ -2,7 +2,11 @@ import { Component, OnInit } from '@angular/core';
 import {ActivatedRoute} from '@angular/router'
 import {DatabaseProjectServices} from "../services/database-project.services";
 import {Chart} from "angular-highcharts"
+import {Options} from "highcharts";
 import {openTaskChartOptions} from "./helpers/openTaskChartOptions";
+import {complexityTaskChartOptions} from "./helpers/complexityTaskChartOptions";
+import {taskPriorityChartOptions} from "./helpers/taskPriorityChartOptions";
+import {closeTaskPriorityChartOptions} from "./helpers/closeTaskPriorityChartOptions";
 import {ConfigurationService} from "../services/configuration.services";
 
 
@@ -17,6 +21,11 @@ export class CompareProjectPageComponent implements OnInit {
   ids: string[] = []
   resultReq: ReqData[] = []
   openTaskChart = new Chart()
+  complexityTaskChart = new Chart()
+  taskPriorityChart = new Chart()
+  closeTaskPriorityChart = new Chart()
+
+  colors = ["blue", "green", "red", "orange", "purple", "black"]
 
   webUrl = ""
 
@@ -39,8 +48,6 @@ export class CompareProjectPageComponent implements OnInit {
       })
     }
 
-    let colors = ["blue", "green", "red", "orange", "purple", "black"]
-
     let openTaskElem = document.getElementById('open-task') as HTMLElement;
     let openTaskTitle = document.getElementById('open-task-title') as HTMLElement;
     this.dbProjectService.getComplitedGraph("1", this.projects).subscribe(info => {
@@ -59,18 +66,62 @@ export class CompareProjectPageComponent implements OnInit {
           }
           openTaskChartOptions.series?.push({ name: this.projects[j],
             type: "column",
-            color: colors[j],
+            color: this.colors[j],
             data: count})
           this.openTaskChart = new Chart(openTaskChartOptions)
         }
       }
     })
+
+    // Histogram-shaped comparisons (fixed categories): one column series per
+    // project, pulled from each project's single-project graph. No backend
+    // compare endpoint is needed for these.
+    this.buildComparison("4", complexityTaskChartOptions, c => (this.complexityTaskChart = c))
+    this.buildComparison("5", taskPriorityChartOptions, c => (this.taskPriorityChart = c))
+    this.buildComparison("6", closeTaskPriorityChartOptions, c => (this.closeTaskPriorityChart = c))
+  }
+
+  // Fetch each project's single-project graph for `task` and overlay one column
+  // series per project onto the shared options, rebuilding the chart as
+  // responses arrive. Projects with no data for the task are skipped.
+  private buildComparison(task: string, options: Options, assign: (chart: Chart) => void): void {
+    for (let j = 0; j < this.projects.length; j++) {
+      const projectName = this.projects[j]
+      this.dbProjectService.getGraph(task, projectName).subscribe(info => {
+        const data: any = info.data
+        if (data == null || data["categories"] == null) {
+          return
+        }
+        // @ts-ignore
+        options.xAxis["categories"] = data["categories"]
+        const count: number[] = []
+        for (let i = 0; i < data["categories"].length; i++) {
+          count.push(data["count"][data["categories"][i]])
+        }
+        options.series?.push({
+          name: projectName,
+          type: "column",
+          color: this.colors[j],
+          data: count,
+        } as any)
+        assign(new Chart(options))
+      })
+    }
   }
 
   ngOnDestroy(): void{
     // @ts-ignore
     openTaskChartOptions.xAxis["categories"] = []
     openTaskChartOptions.series = []
+    // @ts-ignore
+    complexityTaskChartOptions.xAxis["categories"] = []
+    complexityTaskChartOptions.series = []
+    // @ts-ignore
+    taskPriorityChartOptions.xAxis["categories"] = []
+    taskPriorityChartOptions.series = []
+    // @ts-ignore
+    closeTaskPriorityChartOptions.xAxis["categories"] = []
+    closeTaskPriorityChartOptions.series = []
   }
 }
 

@@ -1,6 +1,7 @@
 import { Options } from 'highcharts';
 
-export const openTaskChartOptions: Options = {
+// Comparison version: one column series per project (legend on), no default series.
+export const complexityTaskChartOptions: Options = {
   chart: {
     type: 'column',
   },
@@ -8,12 +9,12 @@ export const openTaskChartOptions: Options = {
     enabled: false,
   },
   title: {
-    text: 'Open task time statistic',
+    text: 'Complexity task',
   },
   yAxis: {
     visible: true,
     title: {
-      text: 'Open issue count'
+      text: 'Issue count'
     }
   },
   legend: {
@@ -23,7 +24,7 @@ export const openTaskChartOptions: Options = {
     lineColor: '#fff',
     categories: [],
     title: {
-      text: 'Time'
+      text: 'Log time'
     }
   },
 
@@ -33,11 +34,5 @@ export const openTaskChartOptions: Options = {
     } as any,
   },
 
-  series: [
-    {
-      type: 'column',
-      color: '#506ef9',
-      data: [],
-    },
-  ],
+  series: [],
 };
