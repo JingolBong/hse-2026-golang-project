@@ -11,7 +11,7 @@ import (
 
 type ProjectView struct {
 	Existence bool            `json:"Existence"`
-	Id        int64           `json:"Id"`
+	Id        int64           `json:"Id,string"`
 	Key       string          `json:"Key"`
 	Name      string          `json:"Name"`
 	Url       string          `json:"Url"`
