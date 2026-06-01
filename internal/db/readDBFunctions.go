@@ -83,7 +83,7 @@ func (s *Storage) GetAllProjects(ctx context.Context) ([]models.Project, error) 
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		for rows.Next() {
 			var project models.Project
@@ -140,7 +140,7 @@ func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) (
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		issues = nil
 		for rows.Next() {
@@ -199,7 +199,7 @@ func (s *Storage) GetStatusChangesByProject(ctx context.Context, projectJiraID i
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		changes = nil
 		for rows.Next() {
@@ -244,7 +244,7 @@ func (s *Storage) GetStatusChangesByIssue(ctx context.Context, issueJiraID int64
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		changes = nil
 		for rows.Next() {

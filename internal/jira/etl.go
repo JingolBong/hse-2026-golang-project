@@ -117,7 +117,7 @@ func LoadProject(
 	}
 
 	go func() {
-		eg.Wait()
+		_ = eg.Wait()
 		close(results)
 	}()
 

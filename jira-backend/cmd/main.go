@@ -75,7 +75,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("create grpc connection: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	grpcClient := pb.NewConnectorServiceClient(conn)
 
 	projectService := service.NewProjectService(repo, grpcClient, logger)

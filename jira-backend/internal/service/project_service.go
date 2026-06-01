@@ -117,7 +117,7 @@ func (s *ProjectService) Delete(ctx context.Context, id int64) error {
 
 	_, err := s.grpcClient.DeleteProject(withRequestID(ctx), req)
 	if err != nil {
-		return fmt.Errorf("Error deleting a project via the connector: %w", err)
+		return fmt.Errorf("error deleting a project via the connector: %w", err)
 	}
 
 	return nil

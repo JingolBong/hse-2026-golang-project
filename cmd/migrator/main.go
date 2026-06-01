@@ -42,7 +42,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	logger.Info("Connected to DB, running migrations...")
 

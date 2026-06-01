@@ -62,7 +62,7 @@ func (s *Storage) HealthCheck(ctx context.Context) (*DBHealth, error) {
 		health.MasterUp = true
 
 		var inRecovery bool
-		s.writeDB.QueryRowContext(ctx,
+		_ = s.writeDB.QueryRowContext(ctx,
 			"SELECT pg_is_in_recovery()").
 			Scan(&inRecovery)
 
@@ -73,7 +73,7 @@ func (s *Storage) HealthCheck(ctx context.Context) (*DBHealth, error) {
 		health.ReplicaUp = true
 
 		var inRecovery bool
-		s.readDB.QueryRowContext(ctx,
+		_ = s.readDB.QueryRowContext(ctx,
 			"SELECT pg_is_in_recovery()").
 			Scan(&inRecovery)
 
