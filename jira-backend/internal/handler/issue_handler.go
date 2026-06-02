@@ -44,7 +44,7 @@ func (h *IssueHandler) GetByProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := writeData(w, r, http.StatusOK, data, links); err != nil {
+	if err := writeData(w, r, http.StatusOK, issuesFromModels(data), links); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
