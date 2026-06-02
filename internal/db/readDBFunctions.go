@@ -129,8 +129,10 @@ func (s *Storage) GetAuthorByJiraID(ctx context.Context, jiraID int64) (*models.
 
 func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) ([]models.Issue, error) {
 	const query = `
-	SELECT i.jira_id, i.project_id, i.key, i.summary, i.status, i.priority, i.created_time, i.updated_time, i.closed_time, i.time_spent, i.creator_id, i.assignee_id
+	SELECT i.jira_id, i.project_id, i.key, i.summary, i.status, i.priority, i.created_time, i.updated_time, i.closed_time, i.time_spent, i.creator_id, i.assignee_id, creator.username, assignee.username
 	FROM issue i
+	LEFT JOIN author creator ON creator.jira_id = i.creator_id
+	LEFT JOIN author assignee ON assignee.jira_id = i.assignee_id
 	WHERE i.project_id = $1
 	ORDER BY i.created_time ASC;
 	`
@@ -145,21 +147,26 @@ func (s *Storage) GetIssuesByProject(ctx context.Context, projectJiraID int64) (
 		issues = nil
 		for rows.Next() {
 			var (
-				i          models.Issue
-				updatedAt  sql.NullTime
-				closedAt   sql.NullTime
-				timeSpent  sql.NullInt32
-				creatorID  sql.NullInt64
-				assigneeID sql.NullInt64
+				i            models.Issue
+				updatedAt    sql.NullTime
+				closedAt     sql.NullTime
+				timeSpent    sql.NullInt32
+				creatorID    sql.NullInt64
+				assigneeID   sql.NullInt64
+				creatorName  sql.NullString
+				assigneeName sql.NullString
 			)
 			if err := rows.Scan(
 				&i.JiraID, &i.ProjectID, &i.Key,
 				&i.Summary, &i.Status, &i.Priority,
 				&i.CreatedAt, &updatedAt, &closedAt,
 				&timeSpent, &creatorID, &assigneeID,
+				&creatorName, &assigneeName,
 			); err != nil {
 				return err
 			}
+			i.CreatorName = creatorName.String
+			i.AssigneeName = assigneeName.String
 			if updatedAt.Valid {
 				i.UpdatedAt = &updatedAt.Time
 			}

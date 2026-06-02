@@ -28,6 +28,11 @@ type Issue struct {
 	TimeSpent  *int32     `db:"time_spent"`
 	CreatorID  *int64     `db:"creator_id"`
 	AssigneeID *int64     `db:"assignee_id"`
+
+	// Resolved from the author table on read (GetIssuesByProject); not stored
+	// on the issue row itself. Empty when the issue has no creator/assignee.
+	CreatorName  string `db:"-"`
+	AssigneeName string `db:"-"`
 }
 
 type StatusChange struct {

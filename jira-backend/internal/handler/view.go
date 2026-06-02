@@ -4,10 +4,69 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"hse-2026-golang-project/internal/models"
 	"hse-2026-golang-project/jira-backend/internal/service"
 )
+
+const issueTimeLayout = "2006-01-02 15:04"
+
+// IssueView is the JSON shape the frontend issues table expects. The DB model
+// (models.Issue) has no json tags and exposes raw ids/Go field names, so we
+// map it here: CreatedAt -> CreatedTime, ClosedAt -> ClosedTime, and the
+// author ids are resolved to usernames (Creator/Assignee) on read.
+// Type has no column in the schema, so it is always empty for now.
+type IssueView struct {
+	Key         string `json:"Key"`
+	Summary     string `json:"Summary"`
+	Status      string `json:"Status"`
+	Priority    string `json:"Priority"`
+	Type        string `json:"Type"`
+	CreatedTime string `json:"CreatedTime"`
+	ClosedTime  string `json:"ClosedTime"`
+	UpdatedTime string `json:"UpdatedTime"`
+	Creator     string `json:"Creator"`
+	Assignee    string `json:"Assignee"`
+	TimeSpent   *int32 `json:"TimeSpent,omitempty"`
+}
+
+func formatIssueTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(issueTimeLayout)
+}
+
+func formatIssueTimePtr(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return formatIssueTime(*t)
+}
+
+func issueFromModel(i models.Issue) IssueView {
+	return IssueView{
+		Key:         i.Key,
+		Summary:     i.Summary,
+		Status:      i.Status,
+		Priority:    i.Priority,
+		CreatedTime: formatIssueTime(i.CreatedAt),
+		ClosedTime:  formatIssueTimePtr(i.ClosedAt),
+		UpdatedTime: formatIssueTimePtr(i.UpdatedAt),
+		Creator:     i.CreatorName,
+		Assignee:    i.AssigneeName,
+		TimeSpent:   i.TimeSpent,
+	}
+}
+
+func issuesFromModels(items []models.Issue) []IssueView {
+	views := make([]IssueView, 0, len(items))
+	for _, i := range items {
+		views = append(views, issueFromModel(i))
+	}
+	return views
+}
 
 type ProjectView struct {
 	Existence bool            `json:"Existence"`
