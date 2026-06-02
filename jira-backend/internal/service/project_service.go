@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"hse-2026-golang-project/internal/db"
 	"hse-2026-golang-project/internal/models"
 
 	pb "hse-2026-golang-project/internal/proto/connector"
 	"hse-2026-golang-project/jira-backend/internal/reqid"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 func withRequestID(ctx context.Context) context.Context {
@@ -117,6 +120,9 @@ func (s *ProjectService) Delete(ctx context.Context, id int64) error {
 
 	_, err := s.grpcClient.DeleteProject(withRequestID(ctx), req)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return db.ErrNotFound
+		}
 		return fmt.Errorf("error deleting a project via the connector: %w", err)
 	}
 
