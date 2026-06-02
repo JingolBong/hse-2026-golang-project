@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import {DatabaseProjectServices} from "../services/database-project.services";
+import {ConfigurationService} from "../services/configuration.services";
 import {IProj} from "../models/proj.model";
 import {CheckedProject} from "../models/check-element.model";
 
@@ -14,8 +15,13 @@ export class MyProjectPageComponent implements OnInit {
   loading = false
   noProjects: boolean = false
   inited: boolean = false
+  webUrl = ""
 
-  constructor(private myProjectService: DatabaseProjectServices) { }
+  constructor(private myProjectService: DatabaseProjectServices, configurationService: ConfigurationService) {
+    const host = configurationService.getValue<string>("webHost", "localhost");
+    const port = configurationService.getValue<number>("webPort", 4200);
+    this.webUrl = `${host}:${port}`;
+  }
 
   ngOnInit(): void {
     this.loading = true

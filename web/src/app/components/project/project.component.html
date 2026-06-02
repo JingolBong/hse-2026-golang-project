@@ -9,6 +9,7 @@
         'btnAdd' : !adding,
         'btnDelete' : adding
        }"
+      [disabled]="busy"
       (click)="addMyProject(project)">
         {{ adding ? "Удалить" : "Добавить" }}
       </button>
