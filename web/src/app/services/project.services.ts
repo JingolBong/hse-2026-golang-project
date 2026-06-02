@@ -30,7 +30,9 @@ export class ProjectServices {
       .pipe(switchMap(href => this.http.post<IRequestObject>(`${href}?${params.toString()}`, {})));
   }
 
-  deleteProject(id: Number): Observable<IRequestObject> {
+  // id is kept as a string: the backend serializes the project id as a JSON
+  // string to preserve int64 precision, which overflows a JS number.
+  deleteProject(id: string | number): Observable<IRequestObject> {
     return this.hateoas
       .resolveTemplate("projectStat", {id: String(id)})
       .pipe(switchMap(href => this.http.delete<IRequestObject>(href)));

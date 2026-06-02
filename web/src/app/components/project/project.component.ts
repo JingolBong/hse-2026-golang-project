@@ -46,18 +46,18 @@ export class ProjectComponent implements OnInit {
     }
 
     // The DB id is assigned asynchronously after "add", so this local copy may
-    // still carry Id=0. Resolve the real id from the server before deleting,
-    // otherwise we would fire DELETE /projects/0 and get a 500.
+    // still carry Id=0. Resolve the real id (an opaque string) from the server
+    // before deleting, otherwise we fire DELETE /projects/0 and get an error.
     this.resolveId(project).subscribe({
       next: id => {
-        if (id <= 0) {
+        if (id === "") {
           this.busy = false;
           alert("Project is still being added, please wait a moment and try again");
           return;
         }
         this.projectService.deleteProject(id).subscribe({
           next: () => {
-            this.project.Id = id;
+            this.project.Id = id as unknown as Number;
             this.adding = false;
             this.busy = false;
           },
@@ -81,16 +81,25 @@ export class ProjectComponent implements OnInit {
     });
   }
 
-  private resolveId(project: IProj): Observable<number> {
-    const current = Number(project.Id);
-    if (current > 0) {
+  private resolveId(project: IProj): Observable<string> {
+    const current = this.normalizeId(project.Id);
+    if (current !== "") {
       return of(current);
     }
     return this.projectService.getAll(1, project.Name).pipe(
       map(resp => {
         const match = (resp.data as IProj[] | undefined)?.find(p => p.Key === project.Key);
-        return match ? Number(match.Id) : 0;
+        return match ? this.normalizeId(match.Id) : "";
       }),
     );
+  }
+
+  // The backend serializes the project id as a JSON string to preserve int64
+  // precision (it overflows a JS number). Keep it an opaque string — never
+  // coerce with Number(), or large ids round to a wrong value and DELETE 404s.
+  // Returns "" for an absent/not-yet-assigned id (0 or empty).
+  private normalizeId(id: unknown): string {
+    const s = String(id ?? "").trim();
+    return s === "" || s === "0" ? "" : s;
   }
 }
