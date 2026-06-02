@@ -145,7 +145,7 @@ func (h *ProjectHandler) Stat(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	links := h.links.ResourceLinks(r)
 	id, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		writeError(w, r, http.StatusBadRequest, "invalid project id", links)
 		return
 	}
